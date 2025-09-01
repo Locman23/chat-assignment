@@ -1,0 +1,6 @@
+<section style="padding:16px">
+  <h2>Dashboard</h2>
+  <p>Welcome, {{ username() }}</p>
+  <p *ngIf="isSuper()">You are a Super Admin (Phase 1 only).</p>
+  <button (click)="logout()">Logout</button>
+</section>
