@@ -128,6 +128,19 @@ app.post("/api/groups/:gid/members", (req, res) => {
   res.status(201).json({ members: g.members });
 });
 
+  // Get group details (including members)
+  app.get("/api/groups/:gid", (req, res) => {
+    const g = groups.find(x => x.id === req.params.gid);
+    if (!g) return res.status(404).json({ error: "group not found" });
+    res.json({
+      id: g.id,
+      name: g.name,
+      ownerUsername: g.ownerUsername,
+      members: g.members,
+      channels: g.channels
+    });
+  });
+
 // List channels in a group
 app.get("/api/groups/:gid/channels", (req, res) => {
   const g = groups.find(x => x.id === req.params.gid);

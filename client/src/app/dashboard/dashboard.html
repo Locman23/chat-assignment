@@ -4,3 +4,85 @@
   <p *ngIf="isSuper()">You are a Super Admin (Phase 1 only).</p>
   <button (click)="logout()">Logout</button>
 </section>
+
+<section *ngIf="isSuper()" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:400px;">
+  <h3>Add User</h3>
+  <form (ngSubmit)="addUser()" #userForm="ngForm">
+    <label for="username">Username:</label>
+    <input id="username" name="username" [(ngModel)]="newUser.username" required />
+    <br />
+    <label for="email">Email:</label>
+    <input id="email" name="email" [(ngModel)]="newUser.email" required />
+    <br />
+    <button type="submit" [disabled]="userForm.invalid">Add User</button>
+    <div *ngIf="addUserError" style="color:red; margin-top:8px;">{{ addUserError }}</div>
+    <div *ngIf="addUserSuccess" style="color:green; margin-top:8px;">User added!</div>
+  </form>
+</section>
+
+<section *ngIf="isSuper() && users.length" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:600px;">
+  <h3>User List</h3>
+  <table style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr style="background:#f5f5f5;">
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Username</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Email</th>
+        <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Roles</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let user of users">
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ user.username }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ user.email }}</td>
+        <td style="padding:8px; border-bottom:1px solid #eee;">{{ user.roles?.join(', ') }}</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section *ngIf="isSuper()" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:400px;">
+  <h3>Add Group</h3>
+  <form (ngSubmit)="addGroup()" #groupForm="ngForm">
+    <label for="groupName">Group Name:</label>
+    <input id="groupName" name="name" [(ngModel)]="newGroup.name" required />
+    <br />
+    <button type="submit" [disabled]="groupForm.invalid">Add Group</button>
+    <div *ngIf="addGroupError" style="color:red; margin-top:8px;">{{ addGroupError }}</div>
+    <div *ngIf="addGroupSuccess" style="color:green; margin-top:8px;">Group added!</div>
+  </form>
+</section>
+
+<section *ngIf="isSuper() && groups.length" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:600px;">
+  <h3>Groups</h3>
+  <ul>
+    <li *ngFor="let group of groups">
+      <strong>{{ group.name }}</strong> (Owner: {{ group.ownerUsername }})
+    </li>
+  </ul>
+</section>
+
+<section *ngIf="isSuper() && groups.length" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:600px;">
+  <h3>Select Group</h3>
+  <select [(ngModel)]="selectedGroupId" (change)="fetchMembers()" name="groupSelect">
+    <option *ngFor="let group of groups" [value]="group.id">{{ group.name }} (Owner: {{ group.ownerUsername }})</option>
+  </select>
+</section>
+
+<section *ngIf="isSuper() && members.length" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:600px;">
+  <h3>Group Members</h3>
+  <ul>
+    <li *ngFor="let member of members">{{ member }}</li>
+  </ul>
+</section>
+
+<section *ngIf="isSuper()" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:400px;">
+  <h3>Add Member to Selected Group</h3>
+  <form (ngSubmit)="addMember()" #memberForm="ngForm">
+    <label for="memberUsername">Username:</label>
+    <input id="memberUsername" name="username" [(ngModel)]="newMember.username" required />
+    <br />
+    <button type="submit" [disabled]="memberForm.invalid">Add Member</button>
+    <div *ngIf="addMemberError" style="color:red; margin-top:8px;">{{ addMemberError }}</div>
+    <div *ngIf="addMemberSuccess" style="color:green; margin-top:8px;">Member added!</div>
+  </form>
+</section>
