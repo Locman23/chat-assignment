@@ -63,7 +63,7 @@
 
 <section *ngIf="isSuper() && groups.length" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:600px;">
   <h3>Select Group</h3>
-  <select [(ngModel)]="selectedGroupId" (change)="fetchMembers()" name="groupSelect">
+  <select [(ngModel)]="selectedGroupId" (change)="fetchMembers(); fetchChannels()" name="groupSelect">
     <option *ngFor="let group of groups" [value]="group.id">{{ group.name }} (Owner: {{ group.ownerUsername }})</option>
   </select>
 </section>
@@ -85,4 +85,23 @@
     <div *ngIf="addMemberError" style="color:red; margin-top:8px;">{{ addMemberError }}</div>
     <div *ngIf="addMemberSuccess" style="color:green; margin-top:8px;">Member added!</div>
   </form>
+</section>
+
+<section *ngIf="isSuper()" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:400px;">
+  <h3>Add Channel to Selected Group</h3>
+  <form (ngSubmit)="addChannel()" #channelForm="ngForm">
+    <label for="channelName">Channel Name:</label>
+    <input id="channelName" name="name" [(ngModel)]="newChannel.name" required />
+    <br />
+    <button type="submit" [disabled]="channelForm.invalid">Add Channel</button>
+    <div *ngIf="addChannelError" style="color:red; margin-top:8px;">{{ addChannelError }}</div>
+    <div *ngIf="addChannelSuccess" style="color:green; margin-top:8px;">Channel added!</div>
+  </form>
+</section>
+
+<section *ngIf="isSuper() && channels.length" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:600px;">
+  <h3>Channels in Selected Group</h3>
+  <ul>
+    <li *ngFor="let channel of channels">{{ channel.name }}</li>
+  </ul>
 </section>

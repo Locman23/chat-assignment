@@ -36,6 +36,7 @@ export class Dashboard implements OnInit {
         if (this.groups.length) {
           this.selectedGroupId = this.groups[0].id;
           this.fetchMembers();
+          this.fetchChannels();
         }
       }
     });
@@ -86,6 +87,35 @@ export class Dashboard implements OnInit {
       },
       error: (err) => {
         this.addGroupError = err?.error?.error || 'Failed to add group.';
+      }
+    });
+  }
+
+  channels: any[] = [];
+  newChannel = { name: '' };
+  addChannelError = '';
+  addChannelSuccess = false;
+
+  fetchChannels() {
+    if (!this.selectedGroupId) return;
+    this.api.getChannels(this.selectedGroupId).subscribe({
+      next: (res) => {
+        this.channels = res.channels || [];
+      }
+    });
+  }
+
+  addChannel() {
+    this.addChannelError = '';
+    this.addChannelSuccess = false;
+    this.api.addChannel(this.selectedGroupId, this.newChannel).subscribe({
+      next: (res) => {
+        this.addChannelSuccess = true;
+        this.newChannel = { name: '' };
+        this.fetchChannels();
+      },
+      error: (err) => {
+        this.addChannelError = err?.error?.error || 'Failed to add channel.';
       }
     });
   }
