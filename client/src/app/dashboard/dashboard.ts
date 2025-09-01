@@ -30,9 +30,19 @@ export class Dashboard implements OnInit {
   selectedGroupId: string = '';
 
   fetchGroups() {
+    const cached = localStorage.getItem('groups');
+    if (cached) {
+      this.groups = JSON.parse(cached);
+      if (this.groups.length) {
+        this.selectedGroupId = this.groups[0].id;
+        this.fetchMembers();
+        this.fetchChannels();
+      }
+    }
     this.api.getGroups().subscribe({
       next: (res) => {
         this.groups = res.groups || [];
+        localStorage.setItem('groups', JSON.stringify(this.groups));
         if (this.groups.length) {
           this.selectedGroupId = this.groups[0].id;
           this.fetchMembers();
@@ -98,9 +108,14 @@ export class Dashboard implements OnInit {
 
   fetchChannels() {
     if (!this.selectedGroupId) return;
+    const cached = localStorage.getItem('channels_' + this.selectedGroupId);
+    if (cached) {
+      this.channels = JSON.parse(cached);
+    }
     this.api.getChannels(this.selectedGroupId).subscribe({
       next: (res) => {
         this.channels = res.channels || [];
+        localStorage.setItem('channels_' + this.selectedGroupId, JSON.stringify(this.channels));
       }
     });
   }
@@ -120,12 +135,21 @@ export class Dashboard implements OnInit {
     });
   }
 
-  ngOnInit() {
+  fetchUsers() {
+    const cached = localStorage.getItem('users');
+    if (cached) {
+      this.users = JSON.parse(cached);
+    }
     this.api.getUsers().subscribe({
       next: (res) => {
         this.users = res.users || [];
+        localStorage.setItem('users', JSON.stringify(this.users));
       }
     });
+  }
+
+  ngOnInit() {
+    this.fetchUsers();
     this.fetchGroups();
   }
 
@@ -136,11 +160,7 @@ export class Dashboard implements OnInit {
       next: (res) => {
         this.addUserSuccess = true;
         this.newUser = { username: '', email: '' };
-        this.api.getUsers().subscribe({
-          next: (res) => {
-            this.users = res.users || [];
-          }
-        });
+        this.fetchUsers();
       },
       error: (err) => {
         this.addUserError = err?.error?.error || 'Failed to add user.';
