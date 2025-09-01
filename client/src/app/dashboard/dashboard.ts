@@ -36,7 +36,7 @@ export class Dashboard implements OnInit {
       if (this.groups.length) {
         this.selectedGroupId = this.groups[0].id;
         this.fetchMembers();
-        this.fetchChannels();
+        this.channels = this.groups.find(g => g.id === this.selectedGroupId)?.channels || [];
       }
     }
     this.api.getGroups().subscribe({
@@ -46,7 +46,7 @@ export class Dashboard implements OnInit {
         if (this.groups.length) {
           this.selectedGroupId = this.groups[0].id;
           this.fetchMembers();
-          this.fetchChannels();
+          this.channels = this.groups[0].channels || [];
         }
       }
     });
@@ -108,14 +108,17 @@ export class Dashboard implements OnInit {
 
   fetchChannels() {
     if (!this.selectedGroupId) return;
-    const cached = localStorage.getItem('channels_' + this.selectedGroupId);
-    if (cached) {
-      this.channels = JSON.parse(cached);
-    }
     this.api.getChannels(this.selectedGroupId).subscribe({
       next: (res) => {
         this.channels = res.channels || [];
-        localStorage.setItem('channels_' + this.selectedGroupId, JSON.stringify(this.channels));
+        // update channels in cached groups
+        const cached = localStorage.getItem('groups');
+        let groups = cached ? JSON.parse(cached) : [];
+        const idx = groups.findIndex((g: any) => g.id === this.selectedGroupId);
+        if (idx !== -1) {
+          groups[idx].channels = this.channels;
+          localStorage.setItem('groups', JSON.stringify(groups));
+        }
       }
     });
   }
