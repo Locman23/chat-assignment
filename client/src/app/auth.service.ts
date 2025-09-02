@@ -19,8 +19,14 @@ export class Auth {
     if (saved) this._user.set(saved);
   }
 
-  login(user: User) { this._user.set(user); this.store.set('auth_user', user); }
-  logout() { this._user.set(null); this.store.remove('auth_user'); }
+  login(user: User) {
+    this._user.set(user);
+    this.store.set('auth_user', user);
+  }
+  logout() {
+    this._user.set(null);
+    this.store.remove('auth_user');
+  }
   hasRole(role: string) { return this._user()?.roles.includes(role) ?? false; }
   isAuthed() { return !!this._user(); }
   id() { return this._user()?.id ?? ''; }

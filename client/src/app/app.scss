@@ -1,0 +1,74 @@
+.root,
+:root{
+	--bg: #f7f8f9; /* very light grey page background */
+	--header: #e2e5e8; /* mid grey header */
+	--card: #ffffff; /* cards and inputs */
+	--muted: #6b7280;
+	--accent: #6b7280; /* darker gray for buttons */
+	--accent-2: #374151;
+	--glass: rgba(15,17,19,0.03);
+	--radius: 10px;
+	--container: 1100px;
+}
+
+.app-shell{
+	min-height:100vh;
+	background: linear-gradient(180deg, var(--bg) 0%, #f5f6f7 100%);
+	color: var(--text, #0b0d0e);
+	font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+.container{max-width:var(--container);margin:0 auto;padding:0 20px}
+
+.app-header{padding:18px 0;background:var(--header)}
+.app-header .brand{font-weight:700;font-size:1.2rem;color:var(--text, #0b0d0e)}
+.app-nav{display:flex;gap:12px;align-items:center}
+.nav-link{color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:8px;transition:all .15s}
+.nav-link:hover{color:var(--text, #0b0d0e);background:rgba(11,13,14,0.03)}
+
+.app-main{padding:48px 0}
+.app-footer{padding:26px 0;text-align:center;color:var(--muted);font-size:0.95rem}
+
+/* small card utility */
+.card{background:var(--card);border-radius:var(--radius);padding:18px;box-shadow:0 6px 18px rgba(11,13,14,0.06);border:1px solid rgba(11,13,14,0.04)}
+
+.hero{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:28px}
+.hero .lead{max-width:640px}
+.hero h1{font-size:2rem;margin:0 0 8px}
+.hero p{color:var(--muted);margin:0 0 18px}
+
+.btn{display:inline-block;padding:10px 16px;border-radius:10px;background:linear-gradient(90deg,var(--accent-2),var(--accent));color:white;text-decoration:none;font-weight:600;border:1px solid rgba(11,13,14,0.06)}
+
+@media (max-width:720px){
+	.hero{flex-direction:column;align-items:flex-start}
+	.app-nav{display:none}
+}
+
+.form-inline{display:flex;gap:8px;align-items:center}
+.input{padding:8px 12px;border-radius:8px;background:var(--card);border:1px solid rgba(11,13,14,0.08);color:var(--text, #0b0d0e)}
+
+.muted{color:var(--muted)}
+
+/* Utilities */
+.mr-2{margin-right:8px}
+.mt-2{margin-top:8px}
+.mt-6{margin-top:24px}
+.mx-auto{margin-left:auto;margin-right:auto}
+.max-w-420{max-width:420px}
+.fullwidth{width:100%}
+.small-w{width:120px}
+.stacked{flex-direction:column;align-items:stretch}
+
+/* Elevation helpers */
+.elev-sm{box-shadow:0 4px 10px rgba(11,13,14,0.04)}
+.elev-md{box-shadow:0 8px 22px rgba(11,13,14,0.06)}
+
+/* Input focus/accessibility */
+.input:focus{outline:none;border-color:var(--accent-2);box-shadow:0 0 0 4px rgba(55,65,81,0.06)}
+
+/* Button variants for clarity and contrast */
+.btn{display:inline-block;padding:10px 14px;border-radius:8px;background:linear-gradient(90deg,var(--accent-2),var(--accent));color:#fff;text-decoration:none;font-weight:600;border:1px solid rgba(11,13,14,0.06);cursor:pointer}
+.btn--secondary{background:var(--card);color:var(--text);border:1px solid rgba(11,13,14,0.06)}
+.btn-sm{padding:6px 8px;font-size:0.9rem}
+.btn-ghost{background:transparent;color:var(--accent);border:1px solid transparent}
+.btn-danger{background:#d9534f;color:#fff}
