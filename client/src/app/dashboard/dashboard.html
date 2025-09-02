@@ -81,7 +81,7 @@
               <li *ngFor="let member of (group.displayMembers || [])">
                 {{ member }}
                 <button *ngIf="canAdminGroup(group) && member !== group.ownerUsername" class="btn btn-sm mr-2" (click)="removeMemberFromGroup(group, member)">Remove</button>
-                <button *ngIf="(isSuper() || isGroupOwner(group)) && member !== group.ownerUsername" class="btn btn-sm" (click)="toggleGroupAdmin(group, member)">{{ isGroupAdmin(group, member) ? 'Remove Admin' : 'Make Admin' }}</button>
+                <button *ngIf="(isSuper() || isGroupOwner(group)) && member !== group.ownerUsername" class="btn btn-sm" (click)="toggleGroupAdmin(group, member)" [attr.aria-label]="isGroupAdmin(group, member) ? 'Remove admin ' + member : 'Make admin ' + member">{{ isGroupAdmin(group, member) ? 'Remove Admin' : 'Make Admin' }}</button>
               </li>
             </ul>
             <form *ngIf="canAdminGroup(group)" (ngSubmit)="addMemberToGroup(group)" #addMemberForm="ngForm" class="form-inline mt-2">
@@ -90,7 +90,7 @@
             </form>
             <!-- Request to join if not a member -->
             <div *ngIf="!isSuper() && !isMember(group)" class="mt-2">
-              <button class="btn btn-sm" (click)="requestToJoin(group)">Request to join</button>
+              <button class="btn btn-sm" (click)="requestToJoin(group)" aria-label="Request to join {{ group.name }}">Request to join</button>
             </div>
           </td>
           <td>

@@ -15,7 +15,7 @@
       "email": "Alice@example.com",
       "password": "Alice",
       "roles": [
-        "Group Admin"
+        "User"
       ],
       "groups": [
         "g1756801698828380"
@@ -28,12 +28,11 @@
       "name": "General",
       "ownerUsername": "super",
       "admins": [
-        "super",
-        "alice"
+        "super"
       ],
       "members": [
         "super",
-        "alice"
+        "Alice"
       ],
       "channels": [
         {
@@ -43,5 +42,15 @@
       ]
     }
   ],
-  "joinRequests": []
+  "joinRequests": [
+    {
+      "id": "r1756803667853900",
+      "gid": "g1756801698828380",
+      "username": "Alice",
+      "status": "approved",
+      "createdAt": 1756803667853,
+      "processedBy": "super",
+      "processedAt": 1756803676136
+    }
+  ]
 }

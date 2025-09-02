@@ -1,3 +1,7 @@
+// Minimal REST API for Phase-1 chat assignment.
+// - Provides in-memory stores for users, groups, channels and join requests.
+// - Persists state to `data.json` using an atomic write/rename pattern.
+// This file intentionally keeps logic simple and synchronous for clarity.
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -13,6 +17,11 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 // Join requests will be persisted to the data file
 let joinRequests = [];
 
+/**
+ * Persist in-memory data to disk atomically.
+ * Writes a temporary file and renames it over the real data file to reduce
+ * the risk of partial writes.
+ */
 function saveData() {
   try {
     const tmp = DATA_FILE + '.tmp';
@@ -23,6 +32,11 @@ function saveData() {
   }
 }
 
+/**
+ * Load persisted data from disk and normalise structures.
+ * This will override the in-memory defaults if the data file exists.
+ * Defensive normalisation ensures older or trimmed data does not crash the server.
+ */
 function loadData() {
   try {
     if (fs.existsSync(DATA_FILE)) {
@@ -54,6 +68,7 @@ function loadData() {
 }
 
 // ID generator: prefix + timestamp + small random suffix to avoid collisions
+// makeId: simple unique id generator for Phase-1. Not cryptographically secure.
 const makeId = (prefix = 'u') => `${prefix}${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
 // In-memory store (Phase-1)
@@ -222,6 +237,10 @@ const makeRid = () => makeId('r');
 // ---------- Helpers ----------
 
 // Case-insensitive username helpers
+/**
+ * Normalize a username (or string) to a canonical lowercase representation
+ * for case-insensitive comparisons.
+ */
 const normalize = (s) => String(s || '').toLowerCase();
 
 const hasUser = (username) => users.some((u) => normalize(u.username) === normalize(username));
@@ -233,7 +252,10 @@ const getUserById = (id) => users.find((u) => u.id === id);
 // Group helpers
 const getGroupById = (gid) => groups.find((g) => g.id === gid);
 
-// Ensure user's groups[] contains gid
+/**
+ * Ensure a user's `groups` array contains the given gid.
+ * Creates the array if missing (defensive).
+ */
 const attachGroupToUser = (username, gid) => {
   const u = getUserByUsername(username);
   if (!u) return;

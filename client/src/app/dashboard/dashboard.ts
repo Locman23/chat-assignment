@@ -1,4 +1,3 @@
-
 import { Component, OnInit, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -91,6 +90,12 @@ export class Dashboard implements OnInit {
   }
 
   // Toggle admin status: promote if not admin, remove if already admin
+  /**
+   * Toggle a user's admin membership for a group.
+   * - If the user is currently an admin, attempts to remove them via API.
+   * - If not an admin, calls promoteToGroupAdmin which performs an optimistic add.
+   * Optimistic updates are applied locally and rolled back on API error.
+   */
   toggleGroupAdmin(group: any, username: string) {
     this.groupActionError = '';
     this.groupActionSuccess = '';
@@ -205,15 +210,17 @@ export class Dashboard implements OnInit {
 
   // Keep only groups visible to the current user unless Super Admin
   applyGroupVisibilityFilter() {
-    const me = (this.username() || '').toLowerCase();
-    if (this.isSuper()) return; // super sees all groups
-    this.groups = (this.groups || []).filter((g: any) => {
-      const members = (g.members || []).map((m: string) => (m || '').toLowerCase());
-      return members.includes(me);
-    });
+  // No-op: show all groups to authenticated users so they can request to join.
+  // Former behaviour filtered out groups the user wasn't a member of; changed to
+  // allow visibility of available groups and expose the Request-to-Join action.
+  return;
   }
 
   // Request to join a group (called by regular users)
+  /**
+   * Create a join request for the current user to the supplied group.
+   * The server stores requests persistently and Super Admin can approve/deny.
+   */
   requestToJoin(group: any) {
     if (!this.username()) return;
     this.groupActionError = '';
@@ -406,7 +413,12 @@ export class Dashboard implements OnInit {
   }
 
   promoteToGroupAdmin(group: any, username: string) {
-    // This request will require the target user to already have role 'Group Admin' set by Super Admin
+    /**
+     * Promote a group member to a group admin.
+     * Note: the server requires the target user to already have the 'Group Admin' role
+     * (promoted by a Super Admin) before they can be assigned as a group admin.
+     * This method performs an optimistic UI update and rolls back on failure.
+     */
     this.groupActionError = '';
     this.groupActionSuccess = '';
     // optimistic promote

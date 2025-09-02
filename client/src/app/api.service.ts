@@ -47,6 +47,9 @@ export class Api {
   }
 
   // Join requests
+  /**
+   * Convenience / public API for requesting a user be added to a group.
+   */
   requestJoinGroup(groupId: string, payload: { username: string }) {
     return this.http.post<{ request: any }>(`${this.base}/groups/${groupId}/requests`, payload);
   }
@@ -67,8 +70,11 @@ export class Api {
     return this.http.request('delete', `${this.base}/groups/${groupId}`, { body: payload || {} });
   }
 
+  /**
+   * Deprecated: alias for addAdminToGroup. Kept for backwards compatibility.
+   */
   promoteAdmin(groupId: string, payload: { username: string }) {
-    return this.http.post(`${this.base}/groups/${groupId}/admins`, payload);
+    return this.addAdminToGroup(groupId, payload as any);
   }
 
   addAdminToGroup(groupId: string, payload: { username: string; requester: string }) {
