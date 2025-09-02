@@ -1,0 +1,26 @@
+<section class="panel panel-wide">
+  <h2>Chat</h2>
+  <p class="muted">Groups and channels (read-only view). Click a channel to open chat (not implemented).</p>
+
+  <div *ngIf="!groups || groups.length === 0" class="msg msg-muted">No groups available.</div>
+
+  <div *ngFor="let g of groups" class="panel mt-2">
+    <h3>{{ g.name }}</h3>
+    <div class="muted">Owner: {{ g.ownerUsername }}</div>
+    <div class="mt-2">
+      <strong>Members</strong>
+      <ul class="compact-list">
+        <li *ngFor="let m of displayMembers(g)">{{ m }}</li>
+      </ul>
+    </div>
+
+    <div class="mt-2">
+      <strong>Channels</strong>
+      <ul class="compact-list">
+        <li *ngFor="let c of (g.channels || [])">
+          <button class="btn btn-link" disabled aria-disabled="true">{{ c.name }}</button>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
