@@ -11,6 +11,7 @@
 				<div class="auth-area">
 					<a *ngIf="!isAuthed()" routerLink="/login" class="nav-link">Login</a>
 					<span *ngIf="isAuthed()" class="nav-link">{{ username() }}</span>
+					<a *ngIf="isAuthed() && (username() !== 'super')" routerLink="/profile" class="nav-link">Profile</a>
 					<button *ngIf="isAuthed()" class="nav-link btn-ghost" (click)="logout()">Logout</button>
 				</div>
 			</div>

@@ -90,4 +90,9 @@ export class Api {
   deleteUser(userId: string, payload?: { requester?: string }) {
     return this.http.request('delete', `${this.base}/users/${userId}`, { body: payload || {} });
   }
+
+  // Update user profile (username/email/password). requester must be provided.
+  updateUserProfile(userId: string, payload: { username?: string; email?: string; password?: string; requester: string }) {
+    return this.http.put<{ user: any }>(`${this.base}/users/${userId}`, payload);
+  }
 }

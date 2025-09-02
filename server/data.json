@@ -10,16 +10,14 @@
       "groups": []
     },
     {
-      "id": "u1756802173622432",
-      "username": "Alice",
-      "email": "Alice@example.com",
-      "password": "Alice",
+      "id": "u1756805382286321",
+      "username": "alice",
+      "email": "alice.com",
+      "password": "alice",
       "roles": [
         "User"
       ],
-      "groups": [
-        "g1756801698828380"
-      ]
+      "groups": []
     }
   ],
   "groups": [
@@ -31,8 +29,7 @@
         "super"
       ],
       "members": [
-        "super",
-        "Alice"
+        "super"
       ],
       "channels": [
         {
