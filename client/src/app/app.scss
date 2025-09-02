@@ -23,6 +23,11 @@
 .app-header{padding:18px 0;background:var(--header)}
 .app-header .brand{font-weight:700;font-size:1.2rem;color:var(--text, #0b0d0e)}
 .app-nav{display:flex;gap:12px;align-items:center}
+
+/* Header layout: left nav, right auth area */
+.header-row{display:flex;align-items:center;gap:16px}
+.header-row .app-nav{flex:0 0 auto}
+.auth-area{margin-left:auto;display:flex;align-items:center;gap:8px}
 .nav-link{color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:8px;transition:all .15s}
 .nav-link:hover{color:var(--text, #0b0d0e);background:rgba(11,13,14,0.03)}
 

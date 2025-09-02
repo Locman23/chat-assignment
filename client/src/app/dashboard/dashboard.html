@@ -1,8 +1,6 @@
 <section class="dashboard-header">
   <h2>Dashboard</h2>
-  <p>Welcome, {{ username() }}</p>
   <p *ngIf="isSuper()" class="muted">You are a Super Admin.</p>
-  <button class="btn btn-ghost" (click)="logout()">Logout</button>
 </section>
 
 <!-- Users (Super Admin only) -->
