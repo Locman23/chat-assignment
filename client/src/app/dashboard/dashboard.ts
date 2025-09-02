@@ -1,43 +1,43 @@
-import { Component, computed, OnInit } from '@angular/core';
-import { UserFilterPipe } from './user-filter.pipe';
+
+import { Component, OnInit, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Auth } from '../auth.service';
 import { Router } from '@angular/router';
+
+import { Auth } from '../auth.service';
 import { Api } from '../api.service';
+import { UserFilterPipe } from './user-filter.pipe';
+import { GroupFilterPipe } from './group-filter.pipe';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, UserFilterPipe],
-  templateUrl: './dashboard.html'
+  imports: [CommonModule, FormsModule, UserFilterPipe, GroupFilterPipe],
+  templateUrl: './dashboard.html',
+  styleUrls: ['./dashboard.scss']
 })
 export class Dashboard implements OnInit {
-  userSearch: string = '';
-  userActionError: string = '';
-  userActionSuccess: string = '';
+  // --- Users ---
+  userSearch = '';
+  userActionError = '';
+  userActionSuccess = '';
 
-  newUser = { username: '', email: '', password: '' };
+  newUser: { username: string; email: string; password: string } = { username: '', email: '', password: '' };
   addUserError = '';
   addUserSuccess = false;
   users: any[] = [];
 
+  // --- Groups ---
+  groupSearch = '';
+  groupActionError = '';
+  groupActionSuccess = '';
+
   groups: any[] = [];
-  selectedGroupId: string = '';
+  selectedGroupId = '';
 
-  members: string[] = [];
-  newMember = { username: '' };
-  addMemberError = '';
-  addMemberSuccess = false;
-
-  newGroup = { name: '', ownerUsername: '' };
+  newGroup: { name: string; ownerUsername: string } = { name: '', ownerUsername: '' };
   addGroupError = '';
   addGroupSuccess = false;
-
-  channels: any[] = [];
-  newChannel = { name: '' };
-  addChannelError = '';
-  addChannelSuccess = false;
 
   constructor(private auth: Auth, private router: Router, private api: Api) {}
   username = computed(() => this.auth.user()?.username ?? '');
@@ -80,39 +80,36 @@ export class Dashboard implements OnInit {
     });
   }
 
-  fetchGroups() {
+  // Unified group management logic
+  fetchGroups(): void {
     this.api.getGroups().subscribe({
       next: (res: any) => {
         this.groups = res.groups || [];
-        if (this.groups.length) {
-          this.selectedGroupId = this.groups[0].id;
-          this.fetchMembers();
-          this.fetchChannels();
-        }
-      }
-    });
-  }
 
-  fetchMembers() {
-    if (!this.selectedGroupId) return;
-    this.api.getGroupMembers(this.selectedGroupId).subscribe({
-      next: (res: any) => {
-        this.members = res.members || [];
-      }
-    });
-  }
+        // initialize helpers and fetch members/channels per group
+        this.groups.forEach((group) => {
+          group.newMember = '';
+          group.newChannel = '';
+          group.members = group.members || [];
+          group.channels = group.channels || [];
 
-  addMember() {
-    this.addMemberError = '';
-    this.addMemberSuccess = false;
-    this.api.addGroupMember(this.selectedGroupId, this.newMember).subscribe({
-      next: (res: any) => {
-        this.addMemberSuccess = true;
-        this.newMember = { username: '' };
-        this.fetchMembers();
+          // fetch latest members
+          this.api.getGroupMembers(group.id).subscribe({
+            next: (r: any) => (group.members = r.members || []),
+            error: () => (group.members = group.members || [])
+          });
+
+          // fetch latest channels
+          this.api.getChannels(group.id).subscribe({
+            next: (r: any) => (group.channels = r.channels || []),
+            error: () => (group.channels = group.channels || [])
+          });
+        });
+
+        if (this.groups.length) this.selectedGroupId = this.groups[0].id;
       },
-      error: (err: any) => {
-        this.addMemberError = err?.error?.error || 'Failed to add member.';
+      error: () => {
+        this.groups = [];
       }
     });
   }
@@ -125,7 +122,7 @@ export class Dashboard implements OnInit {
       next: (res: any) => {
         this.addGroupSuccess = true;
         this.newGroup = { name: '', ownerUsername: '' };
-        this.fetchGroups();
+  this.fetchGroups();
       },
       error: (err: any) => {
         this.addGroupError = err?.error?.error || 'Failed to add group.';
@@ -133,26 +130,55 @@ export class Dashboard implements OnInit {
     });
   }
 
-  fetchChannels() {
-    if (!this.selectedGroupId) return;
-    this.api.getChannels(this.selectedGroupId).subscribe({
+  addMemberToGroup(group: any) {
+    this.groupActionError = '';
+    this.groupActionSuccess = '';
+    if (!group.newMember) return;
+    this.api.addGroupMember(group.id, { username: group.newMember }).subscribe({
       next: (res: any) => {
-        this.channels = res.channels || [];
+  group.members = group.members || [];
+  group.members.push(group.newMember);
+        group.newMember = '';
+        this.groupActionSuccess = 'Member added!';
+      },
+      error: (err: any) => {
+        this.groupActionError = err?.error?.error || 'Failed to add member.';
       }
     });
   }
 
-  addChannel() {
-    this.addChannelError = '';
-    this.addChannelSuccess = false;
-    this.api.addChannel(this.selectedGroupId, this.newChannel).subscribe({
+  addChannelToGroup(group: any) {
+    this.groupActionError = '';
+    this.groupActionSuccess = '';
+    if (!group.newChannel) return;
+    this.api.addChannel(group.id, { name: group.newChannel }).subscribe({
       next: (res: any) => {
-        this.addChannelSuccess = true;
-        this.newChannel = { name: '' };
-        this.fetchChannels();
+  group.channels = group.channels || [];
+  group.channels.push({ name: group.newChannel });
+        group.newChannel = '';
+        this.groupActionSuccess = 'Channel added!';
       },
       error: (err: any) => {
-        this.addChannelError = err?.error?.error || 'Failed to add channel.';
+        this.groupActionError = err?.error?.error || 'Failed to add channel.';
+      }
+    });
+  }
+
+  editGroup(group: any) {
+    alert('Edit group feature coming soon!');
+  }
+
+  deleteGroup(group: any) {
+    if (!confirm(`Delete group ${group.name}?`)) return;
+    this.groupActionError = '';
+    this.groupActionSuccess = '';
+    this.api.deleteGroup(group.id).subscribe({
+      next: () => {
+        this.groupActionSuccess = 'Group deleted!';
+        this.groups = this.groups.filter((g: any) => g.id !== group.id);
+      },
+      error: (err: any) => {
+        this.groupActionError = err?.error?.error || 'Failed to delete group.';
       }
     });
   }

@@ -1,120 +1,108 @@
-<section style="padding:16px">
+<section class="dashboard-header">
   <h2>Dashboard</h2>
   <p>Welcome, {{ username() }}</p>
-  <p *ngIf="isSuper()">You are a Super Admin.</p>
-  <button (click)="logout()">Logout</button>
+  <p *ngIf="isSuper()" class="muted">You are a Super Admin.</p>
+  <button class="btn btn-ghost" (click)="logout()">Logout</button>
 </section>
 
 <!-- Super Admin sections below -->
 <ng-container *ngIf="isSuper()">
-  <section style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:800px;">
+  <section class="panel panel-wide">
     <h3>Users</h3>
-    <form (ngSubmit)="addUser()" #userForm="ngForm" style="margin-bottom:24px;">
-      <label for="username">Username:</label>
-      <input id="username" name="username" [(ngModel)]="newUser.username" required />
-      <label for="email" style="margin-left:16px;">Email:</label>
-      <input id="email" name="email" [(ngModel)]="newUser.email" required />
-      <label for="password" style="margin-left:16px;">Password:</label>
-      <input id="password" name="password" [(ngModel)]="newUser.password" type="password" required />
-      <button type="submit" [disabled]="userForm.invalid" style="margin-left:16px;">Add User</button>
-      <div *ngIf="addUserError" style="color:red; margin-top:8px;">{{ addUserError }}</div>
-      <div *ngIf="addUserSuccess" style="color:green; margin-top:8px;">User added!</div>
+    <form (ngSubmit)="addUser()" #userForm="ngForm" class="form-inline">
+      <input id="username" class="input" name="username" [(ngModel)]="newUser.username" required placeholder="username" />
+      <input id="email" class="input" name="email" [(ngModel)]="newUser.email" required placeholder="email" />
+      <input id="password" class="input" name="password" [(ngModel)]="newUser.password" type="password" required placeholder="password" />
+      <button type="submit" class="btn" [disabled]="userForm.invalid">Add User</button>
     </form>
-    <input type="text" [(ngModel)]="userSearch" placeholder="Search users..." style="margin-bottom:12px; width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;" />
-    <table style="width:100%; border-collapse:collapse;">
+    <div *ngIf="addUserError" class="msg msg-error">{{ addUserError }}</div>
+    <div *ngIf="addUserSuccess" class="msg msg-success">User added!</div>
+
+    <input class="input fullwidth" type="text" [(ngModel)]="userSearch" placeholder="Search users..." />
+
+    <table class="table">
       <thead>
-        <tr style="background:#f5f5f5;">
-          <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Username</th>
-          <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Email</th>
-          <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Role</th>
-          <th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">Actions</th>
+        <tr>
+          <th>Username</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
         <tr *ngFor="let user of (users | userFilter:userSearch)" [hidden]="user.username === 'super'">
-          <td style="padding:8px; border-bottom:1px solid #eee;">{{ user.username }}</td>
-          <td style="padding:8px; border-bottom:1px solid #eee;">{{ user.email }}</td>
-          <td style="padding:8px; border-bottom:1px solid #eee;">
-            <select [(ngModel)]="user.roles[0]" (change)="changeUserRole(user)" style="padding:4px; border-radius:4px;" [disabled]="user.roles[0] === 'Super Admin'">
+          <td>{{ user.username }}</td>
+          <td>{{ user.email }}</td>
+          <td>
+            <select [(ngModel)]="user.roles[0]" (change)="changeUserRole(user)" class="input" [disabled]="user.roles[0] === 'Super Admin'">
               <option *ngIf="user.roles[0] === 'Super Admin'" value="Super Admin">Super Admin</option>
               <option *ngIf="user.roles[0] !== 'Super Admin'" value="Group Admin">Group Admin</option>
               <option *ngIf="user.roles[0] !== 'Super Admin'" value="User">User</option>
             </select>
           </td>
-          <td style="padding:8px; border-bottom:1px solid #eee;">
-            <button (click)="editUser(user)" style="margin-right:8px;">Edit</button>
-            <button (click)="deleteUser(user)">Delete</button>
+          <td>
+            <button class="btn btn-sm mr-2" (click)="editUser(user)">Edit</button>
+            <button class="btn btn-sm btn-danger" (click)="deleteUser(user)">Delete</button>
           </td>
         </tr>
       </tbody>
     </table>
-    <div *ngIf="userActionError" style="color:red; margin-top:8px;">{{ userActionError }}</div>
-    <div *ngIf="userActionSuccess" style="color:green; margin-top:8px;">{{ userActionSuccess }}</div>
+    <div *ngIf="userActionError" class="msg msg-error">{{ userActionError }}</div>
+    <div *ngIf="userActionSuccess" class="msg msg-success">{{ userActionSuccess }}</div>
   </section>
 
-  <section style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:400px;">
-    <h3>Add Group</h3>
-    <form (ngSubmit)="addGroup()" #groupForm="ngForm">
-      <label for="groupName">Group Name:</label>
-      <input id="groupName" name="name" [(ngModel)]="newGroup.name" required />
-      <br />
-      <button type="submit" [disabled]="groupForm.invalid">Add Group</button>
-      <div *ngIf="addGroupError" style="color:red; margin-top:8px;">{{ addGroupError }}</div>
-      <div *ngIf="addGroupSuccess" style="color:green; margin-top:8px;">Group added!</div>
-    </form>
-  </section>
-
-  <section *ngIf="groups.length" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:600px;">
+  <section class="panel panel-wide">
     <h3>Groups</h3>
-    <ul>
-      <li *ngFor="let group of groups">
-        <strong>{{ group.name }}</strong> (Owner: {{ group.ownerUsername }})
-      </li>
-    </ul>
+    <form (ngSubmit)="addGroup()" #groupForm="ngForm" class="form-inline">
+      <input id="groupName" class="input" name="name" [(ngModel)]="newGroup.name" required placeholder="Group name" />
+      <button class="btn" type="submit" [disabled]="groupForm.invalid">Add Group</button>
+    </form>
+    <div *ngIf="addGroupError" class="msg msg-error">{{ addGroupError }}</div>
+    <div *ngIf="addGroupSuccess" class="msg msg-success">Group added!</div>
+
+    <input class="input fullwidth" type="text" [(ngModel)]="groupSearch" placeholder="Search groups..." />
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Group Name</th>
+          <th>Owner</th>
+          <th>Members</th>
+          <th>Channels</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let group of (groups | groupFilter:groupSearch)">
+          <td>{{ group.name }}</td>
+          <td>{{ group.ownerUsername }}</td>
+          <td>
+            <ul class="compact-list">
+              <li *ngFor="let member of group.members">{{ member }}</li>
+            </ul>
+            <form (ngSubmit)="addMemberToGroup(group)" #addMemberForm="ngForm" class="form-inline mt-2">
+              <input class="input small-w" name="username" [(ngModel)]="group.newMember" placeholder="Add member..." required />
+              <button class="btn btn-sm" type="submit" [disabled]="addMemberForm.invalid">Add</button>
+            </form>
+          </td>
+          <td>
+            <ul class="compact-list">
+              <li *ngFor="let channel of group.channels">{{ channel.name }}</li>
+            </ul>
+            <form (ngSubmit)="addChannelToGroup(group)" #addChannelForm="ngForm" class="form-inline mt-2">
+              <input class="input small-w" name="name" [(ngModel)]="group.newChannel" placeholder="Add channel..." required />
+              <button class="btn btn-sm" type="submit" [disabled]="addChannelForm.invalid">Add</button>
+            </form>
+          </td>
+          <td>
+            <button class="btn btn-sm mr-2" (click)="editGroup(group)">Edit</button>
+            <button class="btn btn-sm btn-danger" (click)="deleteGroup(group)">Delete</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div *ngIf="groupActionError" class="msg msg-error">{{ groupActionError }}</div>
+    <div *ngIf="groupActionSuccess" class="msg msg-success">{{ groupActionSuccess }}</div>
   </section>
 </ng-container>
 
-<section *ngIf="isSuper() && groups.length" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:600px;">
-  <h3>Select Group</h3>
-  <select [(ngModel)]="selectedGroupId" (change)="fetchMembers(); fetchChannels()" name="groupSelect">
-    <option *ngFor="let group of groups" [value]="group.id">{{ group.name }} (Owner: {{ group.ownerUsername }})</option>
-  </select>
-</section>
-
-<section *ngIf="isSuper() && members.length" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:600px;">
-  <h3>Group Members</h3>
-  <ul>
-    <li *ngFor="let member of members">{{ member }}</li>
-  </ul>
-</section>
-
-<section *ngIf="isSuper()" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:400px;">
-  <h3>Add Member to Selected Group</h3>
-  <form (ngSubmit)="addMember()" #memberForm="ngForm">
-    <label for="memberUsername">Username:</label>
-    <input id="memberUsername" name="username" [(ngModel)]="newMember.username" required />
-    <br />
-    <button type="submit" [disabled]="memberForm.invalid">Add Member</button>
-    <div *ngIf="addMemberError" style="color:red; margin-top:8px;">{{ addMemberError }}</div>
-    <div *ngIf="addMemberSuccess" style="color:green; margin-top:8px;">Member added!</div>
-  </form>
-</section>
-
-<section *ngIf="isSuper()" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:400px;">
-  <h3>Add Channel to Selected Group</h3>
-  <form (ngSubmit)="addChannel()" #channelForm="ngForm">
-    <label for="channelName">Channel Name:</label>
-    <input id="channelName" name="name" [(ngModel)]="newChannel.name" required />
-    <br />
-    <button type="submit" [disabled]="channelForm.invalid">Add Channel</button>
-    <div *ngIf="addChannelError" style="color:red; margin-top:8px;">{{ addChannelError }}</div>
-    <div *ngIf="addChannelSuccess" style="color:green; margin-top:8px;">Channel added!</div>
-  </form>
-</section>
-
-<section *ngIf="isSuper() && channels.length" style="margin-top:32px; padding:16px; border:1px solid #ccc; border-radius:8px; max-width:600px;">
-  <h3>Channels in Selected Group</h3>
-  <ul>
-    <li *ngFor="let channel of channels">{{ channel.name }}</li>
-  </ul>
-</section>
