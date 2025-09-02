@@ -1,10 +1,9 @@
-<section style="padding:16px">
+<section class="card mx-auto max-w-420 mt-6 elev-sm">
   <h2>Login</h2>
-  <form (ngSubmit)="submit()" #f="ngForm">
-    <input [(ngModel)]="username" name="username" placeholder="username" required />
-    <input [(ngModel)]="password" name="password" placeholder="password" type="password" required />
-    <button type="submit" [disabled]="f.invalid || busy">Login</button>
+  <form (ngSubmit)="submit()" #f="ngForm" class="form-inline stacked">
+    <input class="input" [(ngModel)]="username" name="username" placeholder="username" required />
+    <input class="input" [(ngModel)]="password" name="password" placeholder="password" type="password" required />
+    <button class="btn" type="submit" [disabled]="f.invalid || busy">Login</button>
   </form>
-  <small>Try <b>super</b> / <b>123</b></small>
-  <p *ngIf="error" style="color:#c00">{{ error }}</p>
+  <p *ngIf="error" class="msg msg-error">{{ error }}</p>
 </section>
