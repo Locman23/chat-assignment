@@ -41,4 +41,19 @@ export class Api {
   addGroup(payload: { name: string; ownerUsername: string }) {
     return this.http.post<{ group: any }>(`${this.base}/groups`, payload);
   }
+
+  deleteGroup(groupId: string) {
+    return this.http.delete(`${this.base}/groups/${groupId}`);
+  }
+
+  promoteAdmin(groupId: string, payload: { username: string }) {
+    return this.http.post(`${this.base}/groups/${groupId}/admins`, payload);
+  }
+  changeUserRole(userId: string, role: string) {
+    return this.http.put(`${this.base}/users/${userId}/role`, { role });
+  }
+
+  deleteUser(userId: string) {
+    return this.http.delete(`${this.base}/users/${userId}`);
+  }
 }

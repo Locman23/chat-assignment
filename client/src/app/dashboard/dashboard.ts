@@ -1,4 +1,5 @@
 import { Component, computed, OnInit } from '@angular/core';
+import { UserFilterPipe } from './user-filter.pipe';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Auth } from '../auth.service';
@@ -8,10 +9,36 @@ import { Api } from '../api.service';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, UserFilterPipe],
   templateUrl: './dashboard.html'
 })
 export class Dashboard implements OnInit {
+  userSearch: string = '';
+  userActionError: string = '';
+  userActionSuccess: string = '';
+
+  newUser = { username: '', email: '', password: '' };
+  addUserError = '';
+  addUserSuccess = false;
+  users: any[] = [];
+
+  groups: any[] = [];
+  selectedGroupId: string = '';
+
+  members: string[] = [];
+  newMember = { username: '' };
+  addMemberError = '';
+  addMemberSuccess = false;
+
+  newGroup = { name: '', ownerUsername: '' };
+  addGroupError = '';
+  addGroupSuccess = false;
+
+  channels: any[] = [];
+  newChannel = { name: '' };
+  addChannelError = '';
+  addChannelSuccess = false;
+
   constructor(private auth: Auth, private router: Router, private api: Api) {}
   username = computed(() => this.auth.user()?.username ?? '');
   isSuper = () => this.auth.hasRole('Super Admin');
@@ -21,46 +48,55 @@ export class Dashboard implements OnInit {
     this.router.navigate(['/login']);
   }
 
-  newUser = { username: '', email: '' };
-  addUserError = '';
-  addUserSuccess = false;
-  users: any[] = [];
+  changeUserRole(user: any) {
+    this.userActionError = '';
+    this.userActionSuccess = '';
+    this.api.changeUserRole(user.id, user.roles[0]).subscribe({
+      next: () => {
+        this.userActionSuccess = 'Role updated!';
+      },
+      error: (err: any) => {
+        this.userActionError = err?.error?.error || 'Failed to update role.';
+      }
+    });
+  }
 
-  groups: any[] = [];
-  selectedGroupId: string = '';
+  editUser(user: any) {
+    alert('Edit user feature coming soon!');
+  }
+
+  deleteUser(user: any) {
+    if (!confirm(`Delete user ${user.username}?`)) return;
+    this.userActionError = '';
+    this.userActionSuccess = '';
+    this.api.deleteUser(user.id).subscribe({
+      next: () => {
+        this.userActionSuccess = 'User deleted!';
+        this.users = this.users.filter((u: any) => u.id !== user.id);
+      },
+      error: (err: any) => {
+        this.userActionError = err?.error?.error || 'Failed to delete user.';
+      }
+    });
+  }
 
   fetchGroups() {
-    const cached = localStorage.getItem('groups');
-    if (cached) {
-      this.groups = JSON.parse(cached);
-      if (this.groups.length) {
-        this.selectedGroupId = this.groups[0].id;
-        this.fetchMembers();
-        this.channels = this.groups.find(g => g.id === this.selectedGroupId)?.channels || [];
-      }
-    }
     this.api.getGroups().subscribe({
-      next: (res) => {
+      next: (res: any) => {
         this.groups = res.groups || [];
-        localStorage.setItem('groups', JSON.stringify(this.groups));
         if (this.groups.length) {
           this.selectedGroupId = this.groups[0].id;
           this.fetchMembers();
-          this.channels = this.groups[0].channels || [];
+          this.fetchChannels();
         }
       }
     });
   }
 
-  members: string[] = [];
-  newMember = { username: '' };
-  addMemberError = '';
-  addMemberSuccess = false;
-
   fetchMembers() {
     if (!this.selectedGroupId) return;
     this.api.getGroupMembers(this.selectedGroupId).subscribe({
-      next: (res) => {
+      next: (res: any) => {
         this.members = res.members || [];
       }
     });
@@ -70,55 +106,38 @@ export class Dashboard implements OnInit {
     this.addMemberError = '';
     this.addMemberSuccess = false;
     this.api.addGroupMember(this.selectedGroupId, this.newMember).subscribe({
-      next: (res) => {
+      next: (res: any) => {
         this.addMemberSuccess = true;
         this.newMember = { username: '' };
         this.fetchMembers();
       },
-      error: (err) => {
+      error: (err: any) => {
         this.addMemberError = err?.error?.error || 'Failed to add member.';
       }
     });
   }
-
-  newGroup = { name: '', ownerUsername: '' };
-  addGroupError = '';
-  addGroupSuccess = false;
 
   addGroup() {
     this.addGroupError = '';
     this.addGroupSuccess = false;
     this.newGroup.ownerUsername = this.username();
     this.api.addGroup(this.newGroup).subscribe({
-      next: (res) => {
+      next: (res: any) => {
         this.addGroupSuccess = true;
         this.newGroup = { name: '', ownerUsername: '' };
         this.fetchGroups();
       },
-      error: (err) => {
+      error: (err: any) => {
         this.addGroupError = err?.error?.error || 'Failed to add group.';
       }
     });
   }
 
-  channels: any[] = [];
-  newChannel = { name: '' };
-  addChannelError = '';
-  addChannelSuccess = false;
-
   fetchChannels() {
     if (!this.selectedGroupId) return;
     this.api.getChannels(this.selectedGroupId).subscribe({
-      next: (res) => {
+      next: (res: any) => {
         this.channels = res.channels || [];
-        // update channels in cached groups
-        const cached = localStorage.getItem('groups');
-        let groups = cached ? JSON.parse(cached) : [];
-        const idx = groups.findIndex((g: any) => g.id === this.selectedGroupId);
-        if (idx !== -1) {
-          groups[idx].channels = this.channels;
-          localStorage.setItem('groups', JSON.stringify(groups));
-        }
       }
     });
   }
@@ -127,26 +146,21 @@ export class Dashboard implements OnInit {
     this.addChannelError = '';
     this.addChannelSuccess = false;
     this.api.addChannel(this.selectedGroupId, this.newChannel).subscribe({
-      next: (res) => {
+      next: (res: any) => {
         this.addChannelSuccess = true;
         this.newChannel = { name: '' };
         this.fetchChannels();
       },
-      error: (err) => {
+      error: (err: any) => {
         this.addChannelError = err?.error?.error || 'Failed to add channel.';
       }
     });
   }
 
   fetchUsers() {
-    const cached = localStorage.getItem('users');
-    if (cached) {
-      this.users = JSON.parse(cached);
-    }
     this.api.getUsers().subscribe({
-      next: (res) => {
+      next: (res: any) => {
         this.users = res.users || [];
-        localStorage.setItem('users', JSON.stringify(this.users));
       }
     });
   }
@@ -160,12 +174,12 @@ export class Dashboard implements OnInit {
     this.addUserError = '';
     this.addUserSuccess = false;
     this.api.addUser(this.newUser).subscribe({
-      next: (res) => {
+      next: (res: any) => {
         this.addUserSuccess = true;
-        this.newUser = { username: '', email: '' };
+        this.newUser = { username: '', email: '', password: '' };
         this.fetchUsers();
       },
-      error: (err) => {
+      error: (err: any) => {
         this.addUserError = err?.error?.error || 'Failed to add user.';
       }
     });

@@ -11,11 +11,17 @@ let users = [
   { id: "u1", username: "super", email: "super@example.com", roles: ["Super Admin"], groups: [] }
 ];
 
-// --- AUTH (minimal) ---
+// --- AUTH (with password check) ---
 app.post("/api/auth/login", (req, res) => {
   const { username, password } = req.body;
-  if (username === "super" && password === "123") {
-    return res.json({ user: users[0] });
+  const user = users.find(u => u.username === username);
+  if (!user) return res.status(401).json({ error: "Invalid username/password" });
+  if (user.password && user.password === password) {
+    return res.json({ user });
+  }
+  // For super user, allow default password
+  if (user.username === "super" && password === "123") {
+    return res.json({ user });
   }
   res.status(401).json({ error: "Invalid username/password" });
 });
@@ -26,7 +32,7 @@ app.get("/api/users", (req, res) => {
 });
 
 app.post("/api/users", (req, res) => {
-  const { username, email } = req.body || {};
+  const { username, email, password } = req.body || {};
   if (!username || !username.trim()) {
     return res.status(400).json({ error: "username required" });
   }
@@ -38,11 +44,43 @@ app.post("/api/users", (req, res) => {
     id: makeId('u'),
     username: username.trim(),
     email: (email || "").trim(),
+    password: password || '',
     roles: ["User"],
     groups: []          // will store group IDs
   };
   users.push(user);
   res.status(201).json({ user });
+});
+
+// Change user role
+app.put("/api/users/:id/role", (req, res) => {
+  const { id } = req.params;
+  const { role } = req.body || {};
+  if (!role || !role.trim()) {
+    return res.status(400).json({ error: "role required" });
+  }
+  const user = users.find(u => u.id === id);
+  if (!user) return res.status(404).json({ error: "user not found" });
+  // Only allow valid roles
+  const validRoles = ["Super Admin", "Group Admin", "User"];
+  if (!validRoles.includes(role)) {
+    return res.status(400).json({ error: "invalid role" });
+  }
+  user.roles = [role];
+  res.json({ user });
+});
+
+// Delete user
+app.delete("/api/users/:id", (req, res) => {
+  const { id } = req.params;
+  const idx = users.findIndex(u => u.id === id);
+  if (idx === -1) return res.status(404).json({ error: "user not found" });
+  const [deleted] = users.splice(idx, 1);
+  // Remove user from all groups
+  groups.forEach(g => {
+    g.members = g.members.filter(m => m.toLowerCase() !== deleted.username.toLowerCase());
+  });
+  res.json({ success: true });
 });
 
 // --- GROUPS + CHANNELS (new) ---
@@ -56,11 +94,11 @@ const makeCid = () => makeId('c');
  */
 let groups = [
   {
-    id: "g1",
-    name: "General",
+    id: makeGid,
+    name: "Users",
     ownerUsername: "super",
     members: ["super"],
-    channels: [{ id: "c1", name: "general" }]
+    channels: [{ id: makeCid, name: "general" }]
   }
 ];
 
