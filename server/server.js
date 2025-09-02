@@ -160,6 +160,40 @@ app.put('/api/users/:id/role', (req, res) => {
   return res.json({ user });
 });
 
+// Update a user's profile (username, email, password)
+// body: { username?, email?, password?, requester }
+app.put('/api/users/:id', (req, res) => {
+  const { id } = req.params;
+  const { username, email, password, requester } = req.body || {};
+
+  const user = getUserById(id);
+  if (!user) return res.status(404).json({ error: 'user not found' });
+
+  // Do not allow modifying the built-in super account via this endpoint
+  if (normalize(user.username) === 'super') return res.status(403).json({ error: 'not allowed' });
+
+  const reqUser = getUserByUsername(requester);
+  if (!reqUser) return res.status(403).json({ error: 'requester not found' });
+
+  // Only the user themselves may update their profile in this endpoint
+  if (reqUser.id !== id) return res.status(403).json({ error: 'not authorized to update this profile' });
+
+  // If username is changing, ensure uniqueness (case-insensitive)
+  if (username && normalize(username) !== normalize(user.username)) {
+    const exists = users.some(u => normalize(u.username) === normalize(username));
+    if (exists) return res.status(409).json({ error: 'username taken' });
+    user.username = username.trim();
+  }
+
+  if (email !== undefined) user.email = (email || '').trim();
+  // Only update password when a non-empty value is provided. Leaving the field
+  // blank in the UI will not overwrite the existing password.
+  if (password !== undefined && String(password).trim() !== '') user.password = password;
+
+  saveData();
+  return res.json({ user });
+});
+
 
 // Remove an admin from a group
 // body: { username, requester }
