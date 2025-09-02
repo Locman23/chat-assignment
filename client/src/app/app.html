@@ -2,11 +2,18 @@
 	<header class="app-header">
 		<div class="container">
 			<div class="brand">Chat App</div>
-			<nav class="app-nav">
-				<a routerLink="/" class="nav-link">Home</a>
-				<a routerLink="/login" class="nav-link">Login</a>
-				<a routerLink="/dashboard" class="nav-link">Dashboard</a>
-			</nav>
+			<div class="header-row">
+				<nav class="app-nav">
+					<a routerLink="/" class="nav-link">Home</a>
+					<a routerLink="/dashboard" class="nav-link">Dashboard</a>
+					<a routerLink="/chat" class="nav-link">Chat</a>
+				</nav>
+				<div class="auth-area">
+					<a *ngIf="!isAuthed()" routerLink="/login" class="nav-link">Login</a>
+					<span *ngIf="isAuthed()" class="nav-link">{{ username() }}</span>
+					<button *ngIf="isAuthed()" class="nav-link btn-ghost" (click)="logout()">Logout</button>
+				</div>
+			</div>
 		</div>
 	</header>
 
