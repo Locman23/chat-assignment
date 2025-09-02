@@ -5,9 +5,8 @@
   <button class="btn btn-ghost" (click)="logout()">Logout</button>
 </section>
 
-<!-- Super Admin sections below -->
-<ng-container *ngIf="isSuper()">
-  <section class="panel panel-wide">
+<!-- Users (Super Admin only) -->
+  <section *ngIf="isSuper()" class="panel panel-wide">
     <h3>Users</h3>
     <form (ngSubmit)="addUser()" #userForm="ngForm" class="form-inline">
       <input id="username" class="input" name="username" [(ngModel)]="newUser.username" required placeholder="username" />
@@ -51,9 +50,10 @@
     <div *ngIf="userActionSuccess" class="msg msg-success">{{ userActionSuccess }}</div>
   </section>
 
+  <!-- Groups (visible to authenticated users) -->
   <section class="panel panel-wide">
     <h3>Groups</h3>
-    <form (ngSubmit)="addGroup()" #groupForm="ngForm" class="form-inline">
+  <form *ngIf="canCreateGroup()" (ngSubmit)="addGroup()" #groupForm="ngForm" class="form-inline">
       <input id="groupName" class="input" name="name" [(ngModel)]="newGroup.name" required placeholder="Group name" />
       <button class="btn" type="submit" [disabled]="groupForm.invalid">Add Group</button>
     </form>
@@ -78,9 +78,13 @@
           <td>{{ group.ownerUsername }}</td>
           <td>
             <ul class="compact-list">
-              <li *ngFor="let member of group.members">{{ member }}</li>
+              <li *ngFor="let member of (group.displayMembers || [])">
+                {{ member }}
+                <button *ngIf="canAdminGroup(group) && member !== group.ownerUsername" class="btn btn-sm mr-2" (click)="removeMemberFromGroup(group, member)">Remove</button>
+                <button *ngIf="(isSuper() || isGroupOwner(group)) && member !== group.ownerUsername" class="btn btn-sm" (click)="promoteToGroupAdmin(group, member)">Make Admin</button>
+              </li>
             </ul>
-            <form (ngSubmit)="addMemberToGroup(group)" #addMemberForm="ngForm" class="form-inline mt-2">
+            <form *ngIf="canAdminGroup(group)" (ngSubmit)="addMemberToGroup(group)" #addMemberForm="ngForm" class="form-inline mt-2">
               <input class="input small-w" name="username" [(ngModel)]="group.newMember" placeholder="Add member..." required />
               <button class="btn btn-sm" type="submit" [disabled]="addMemberForm.invalid">Add</button>
             </form>
@@ -89,14 +93,14 @@
             <ul class="compact-list">
               <li *ngFor="let channel of group.channels">{{ channel.name }}</li>
             </ul>
-            <form (ngSubmit)="addChannelToGroup(group)" #addChannelForm="ngForm" class="form-inline mt-2">
+            <form *ngIf="canAdminGroup(group)" (ngSubmit)="addChannelToGroup(group)" #addChannelForm="ngForm" class="form-inline mt-2">
               <input class="input small-w" name="name" [(ngModel)]="group.newChannel" placeholder="Add channel..." required />
               <button class="btn btn-sm" type="submit" [disabled]="addChannelForm.invalid">Add</button>
             </form>
           </td>
           <td>
-            <button class="btn btn-sm mr-2" (click)="editGroup(group)">Edit</button>
-            <button class="btn btn-sm btn-danger" (click)="deleteGroup(group)">Delete</button>
+            <button *ngIf="canAdminGroup(group)" class="btn btn-sm mr-2" (click)="editGroup(group)">Edit</button>
+            <button *ngIf="canAdminGroup(group)" class="btn btn-sm btn-danger" (click)="deleteGroup(group)">Delete</button>
           </td>
         </tr>
       </tbody>
@@ -104,5 +108,5 @@
     <div *ngIf="groupActionError" class="msg msg-error">{{ groupActionError }}</div>
     <div *ngIf="groupActionSuccess" class="msg msg-success">{{ groupActionSuccess }}</div>
   </section>
-</ng-container>
+<!-- end dashboard -->
 

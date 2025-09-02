@@ -1,9 +1,40 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(express.json()); // built-in JSON parser
+
+// Data file for persistence (JSON)
+const DATA_FILE = path.join(__dirname, 'data.json');
+
+function saveData() {
+  try {
+    const tmp = DATA_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ users, groups }, null, 2), 'utf8');
+    fs.renameSync(tmp, DATA_FILE);
+  } catch (err) {
+    console.error('Failed to save data file', err);
+  }
+}
+
+function loadData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf8');
+      const parsed = JSON.parse(raw || '{}');
+      if (Array.isArray(parsed.users)) users = parsed.users;
+      if (Array.isArray(parsed.groups)) groups = parsed.groups;
+    } else {
+      // no data file yet — write defaults
+      saveData();
+    }
+  } catch (err) {
+    console.error('Failed to load data file', err);
+  }
+}
 
 // ID generator: prefix + timestamp + small random suffix to avoid collisions
 const makeId = (prefix = 'u') => `${prefix}${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -53,13 +84,14 @@ app.post('/api/users', (req, res) => {
   };
 
   users.push(user);
+  saveData();
   return res.status(201).json({ user });
 });
 
 // Change user role
 app.put('/api/users/:id/role', (req, res) => {
   const { id } = req.params;
-  const { role } = req.body || {};
+  const { role, requester } = req.body || {};
   if (!role || !role.trim()) return res.status(400).json({ error: 'role required' });
 
   const user = getUserById(id);
@@ -68,21 +100,44 @@ app.put('/api/users/:id/role', (req, res) => {
   const validRoles = ['Super Admin', 'Group Admin', 'User'];
   if (!validRoles.includes(role)) return res.status(400).json({ error: 'invalid role' });
 
+  // Only Super Admin can promote to Group Admin or Super Admin
+  const reqUser = getUserByUsername(requester);
+  const isSuper = reqUser && reqUser.roles.includes('Super Admin');
+  if ((role === 'Group Admin' || role === 'Super Admin') && !isSuper) {
+    return res.status(403).json({ error: 'only Super Admin can assign that role' });
+  }
+
+  // Allow Super Admin to set any role; allow demotion to 'User' by Super Admin as well
+  if (!isSuper && role !== 'User') {
+    return res.status(403).json({ error: 'not authorized to change role' });
+  }
+
   user.roles = [role];
+  saveData();
   return res.json({ user });
 });
 
 // Delete user
 app.delete('/api/users/:id', (req, res) => {
   const { id } = req.params;
+  const { requester } = req.body || {};
   const idx = users.findIndex((u) => u.id === id);
   if (idx === -1) return res.status(404).json({ error: 'user not found' });
+
+  const toDelete = users[idx];
+  const reqUser = getUserByUsername(requester);
+  const isSuper = reqUser && reqUser.roles.includes('Super Admin');
+  const isSelf = reqUser && reqUser.id === id;
+  if (!isSuper && !isSelf) return res.status(403).json({ error: 'not authorized to delete this user' });
 
   const [deleted] = users.splice(idx, 1);
   // Remove user from all groups
   groups.forEach((g) => {
     g.members = g.members.filter((m) => normalize(m) !== normalize(deleted.username));
+    g.admins = (g.admins || []).filter(a => normalize(a) !== normalize(deleted.username));
   });
+
+  saveData();
 
   return res.json({ success: true });
 });
@@ -99,12 +154,16 @@ const makeCid = () => makeId('c');
 let groups = [
   {
     id: makeGid(),
-    name: "General",
-    ownerUsername: "super",
-    members: ["super"],
-    channels: [{ id: makeCid(), name: "general" }]
+    name: 'General',
+    ownerUsername: 'super',
+    admins: ['super'],
+    members: ['super'],
+    channels: [{ id: makeCid(), name: 'general' }]
   }
 ];
+
+// Load persisted data (overrides defaults if data file exists)
+loadData();
 
 // ---------- Helpers ----------
 
@@ -139,17 +198,25 @@ app.post('/api/groups', (req, res) => {
 
   if (!hasUser(ownerUsername)) return res.status(404).json({ error: 'owner user not found' });
 
+  // Only Group Admins or Super Admins can create groups
+  const owner = getUserByUsername(ownerUsername);
+  if (!owner) return res.status(404).json({ error: 'owner not found' });
+  const canCreate = owner.roles.includes('Group Admin') || owner.roles.includes('Super Admin');
+  if (!canCreate) return res.status(403).json({ error: 'only Group Admins or Super Admins can create groups' });
+
   const group = {
     id: makeGid(),
     name: name.trim(),
     ownerUsername: ownerUsername.trim(),
-    members: [ownerUsername.trim()],
-    channels: []
+  admins: [ownerUsername.trim()],
+  members: [ownerUsername.trim()],
+  channels: []
   };
 
   groups.push(group);
   attachGroupToUser(ownerUsername, group.id);
 
+  saveData();
   return res.status(201).json({ group });
 });
 
@@ -157,12 +224,19 @@ app.post('/api/groups', (req, res) => {
 // body: { username }
 app.post('/api/groups/:gid/members', (req, res) => {
   const { gid } = req.params;
-  const { username } = req.body || {};
+  const { username, requester } = req.body || {};
   if (!username?.trim()) return res.status(400).json({ error: 'username required' });
 
   const g = getGroupById(gid);
   if (!g) return res.status(404).json({ error: 'group not found' });
   if (!hasUser(username)) return res.status(404).json({ error: 'user not found' });
+
+  // Only group owner, a group admin for this group, or Super Admin can add members
+  const reqUser = getUserByUsername(requester);
+  const isSuper = reqUser && reqUser.roles.includes('Super Admin');
+  const isGroupOwner = normalize(g.ownerUsername) === normalize(requester);
+  const isGroupAdmin = g.admins && g.admins.some(a => normalize(a) === normalize(requester));
+  if (!isSuper && !isGroupOwner && !isGroupAdmin) return res.status(403).json({ error: 'not authorized to add members' });
 
   const already = g.members.some((m) => normalize(m) === normalize(username));
   if (!already) {
@@ -170,6 +244,7 @@ app.post('/api/groups/:gid/members', (req, res) => {
     attachGroupToUser(username, g.id);
   }
 
+  saveData();
   return res.status(201).json({ members: g.members });
 });
 
@@ -179,6 +254,61 @@ app.get('/api/groups/:gid', (req, res) => {
   if (!g) return res.status(404).json({ error: 'group not found' });
   return res.json({ id: g.id, name: g.name, ownerUsername: g.ownerUsername, members: g.members, channels: g.channels });
 });
+
+  // Add an admin to a group
+  // body: { username, requester }
+  app.post('/api/groups/:gid/admins', (req, res) => {
+    const { gid } = req.params;
+    const { username, requester } = req.body || {};
+    if (!username?.trim()) return res.status(400).json({ error: 'username required' });
+
+    const g = getGroupById(gid);
+    if (!g) return res.status(404).json({ error: 'group not found' });
+    const target = getUserByUsername(username);
+    if (!target) return res.status(404).json({ error: 'user not found' });
+
+    const reqUser = getUserByUsername(requester);
+    const isSuper = reqUser && reqUser.roles.includes('Super Admin');
+    const isGroupOwner = normalize(g.ownerUsername) === normalize(requester);
+    if (!isSuper && !isGroupOwner) return res.status(403).json({ error: 'not authorized to add admins to this group' });
+
+    // Target user must already have Group Admin role (promoted by Super Admin)
+    if (!target.roles.includes('Group Admin') && !target.roles.includes('Super Admin')) {
+      return res.status(400).json({ error: 'user must be a Group Admin (promoted by Super Admin) before adding as group admin' });
+    }
+
+    g.admins = g.admins || [];
+    const exists = g.admins.some(a => normalize(a) === normalize(username));
+    if (!exists) {
+      g.admins.push(username.trim());
+      saveData();
+    }
+    return res.status(201).json({ admins: g.admins });
+  });
+
+  // Remove a member from a group
+  // body: { username, requester }
+  app.delete('/api/groups/:gid/members', (req, res) => {
+    const { gid } = req.params;
+    const { username, requester } = req.body || {};
+    if (!username?.trim()) return res.status(400).json({ error: 'username required' });
+
+    const g = getGroupById(gid);
+    if (!g) return res.status(404).json({ error: 'group not found' });
+
+    const reqUser = getUserByUsername(requester);
+    const isSuper = reqUser && reqUser.roles.includes('Super Admin');
+    const isGroupOwner = normalize(g.ownerUsername) === normalize(requester);
+    const isGroupAdmin = g.admins && g.admins.some(a => normalize(a) === normalize(requester));
+    if (!isSuper && !isGroupOwner && !isGroupAdmin) return res.status(403).json({ error: 'not authorized to remove members' });
+
+    g.members = g.members.filter(m => normalize(m) !== normalize(username));
+    // Also detach group from user's groups list
+    const u = getUserByUsername(username);
+    if (u) u.groups = u.groups.filter(gidVal => gidVal !== gid);
+  saveData();
+  return res.json({ members: g.members });
+  });
 
 // List channels in a group
 app.get('/api/groups/:gid/channels', (req, res) => {
@@ -191,13 +321,23 @@ app.get('/api/groups/:gid/channels', (req, res) => {
 // Delete a group
 app.delete("/api/groups/:gid", (req, res) => {
   const { gid } = req.params;
+  const { requester } = req.body || {};
   const idx = groups.findIndex(g => g.id === gid);
-  if (idx === -1) return res.status(404).json({ error: "group not found" });
+  if (idx === -1) return res.status(404).json({ error: 'group not found' });
+  const g = groups[idx];
+
+  // Authorization: Only group owner or Super Admin can delete a group
+  const reqUser = getUserByUsername(requester);
+  const isSuper = reqUser && reqUser.roles.includes('Super Admin');
+  const isOwner = normalize(g.ownerUsername) === normalize(requester);
+  if (!isSuper && !isOwner) return res.status(403).json({ error: 'not authorized to delete group' });
+
   const [deleted] = groups.splice(idx, 1);
   // Remove group from all users' groups arrays
   users.forEach(u => {
     u.groups = u.groups.filter(gidVal => gidVal !== gid);
   });
+  saveData();
   res.json({ success: true });
 });
 
@@ -205,16 +345,24 @@ app.delete("/api/groups/:gid", (req, res) => {
 // body: { name }
 app.post("/api/groups/:gid/channels", (req, res) => {
   const g = groups.find(x => x.id === req.params.gid);
-  if (!g) return res.status(404).json({ error: "group not found" });
+  if (!g) return res.status(404).json({ error: 'group not found' });
 
-  const { name } = req.body || {};
-  if (!name?.trim()) return res.status(400).json({ error: "channel name required" });
+  const { name, requester } = req.body || {};
+  if (!name?.trim()) return res.status(400).json({ error: 'channel name required' });
+
+  // Only group owner, a group admin for this group, or Super Admin can create channels
+  const reqUser = getUserByUsername(requester);
+  const isSuper = reqUser && reqUser.roles.includes('Super Admin');
+  const isGroupOwner = normalize(g.ownerUsername) === normalize(requester);
+  const isGroupAdmin = g.admins && g.admins.some(a => normalize(a) === normalize(requester));
+  if (!isSuper && !isGroupOwner && !isGroupAdmin) return res.status(403).json({ error: 'not authorized to create channels' });
 
   const taken = g.channels.some(c => c.name.toLowerCase() === name.toLowerCase());
-  if (taken) return res.status(409).json({ error: "channel name taken in this group" });
+  if (taken) return res.status(409).json({ error: 'channel name taken in this group' });
 
   const channel = { id: makeCid(), name: name.trim() };
   g.channels.push(channel);
+  saveData();
   res.status(201).json({ channel });
 });
 

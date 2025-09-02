@@ -1,0 +1,32 @@
+{
+  "users": [
+    {
+      "id": "u1",
+      "username": "super",
+      "email": "super@example.com",
+      "roles": [
+        "Super Admin"
+      ],
+      "groups": []
+    }
+  ],
+  "groups": [
+    {
+      "id": "g1756801698828380",
+      "name": "General",
+      "ownerUsername": "super",
+      "admins": [
+        "super"
+      ],
+      "members": [
+        "super"
+      ],
+      "channels": [
+        {
+          "id": "c1756801698828316",
+          "name": "general"
+        }
+      ]
+    }
+  ]
+}
