@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 
 import { Auth } from '../auth.service';
 import { Api } from '../api.service';
+import { ChangeDetectorRef } from '@angular/core';
 import { UserFilterPipe } from './user-filter.pipe';
 import { GroupFilterPipe } from './group-filter.pipe';
 
@@ -34,12 +35,14 @@ export class Dashboard implements OnInit {
 
   groups: any[] = [];
   selectedGroupId = '';
+  // Join requests (for super admin)
+  joinRequests: any[] = [];
 
   newGroup: { name: string; ownerUsername: string } = { name: '', ownerUsername: '' };
   addGroupError = '';
   addGroupSuccess = false;
 
-  constructor(private auth: Auth, private router: Router, private api: Api) {}
+  constructor(private auth: Auth, private router: Router, private api: Api, private cdr: ChangeDetectorRef) {}
   username = computed(() => this.auth.user()?.username ?? '');
   isSuper = () => this.auth.hasRole('Super Admin');
 
@@ -63,9 +66,57 @@ export class Dashboard implements OnInit {
     return false;
   }
 
+  // Is current user a member of the group?
+  isMember(group: any) {
+    const me = (this.username() || '').toLowerCase();
+    if (!group || !group.members) return false;
+    return (group.members || []).map((m: string) => (m || '').toLowerCase()).includes(me);
+  }
+
+  // Helper to get a group's name by id
+  getGroupNameById(gid: string) {
+    const g = (this.groups || []).find((x: any) => x.id === gid);
+    return g ? g.name : '(unknown)';
+  }
+
   isGroupOwner(group: any) {
     const me = this.username();
     return (group.ownerUsername || '').toLowerCase() === (me || '').toLowerCase();
+  }
+
+  // Is a specific user an admin of the group?
+  isGroupAdmin(group: any, username: string) {
+    if (!group || !group.admins) return false;
+    return (group.admins || []).map((a: string) => (a || '').toLowerCase()).includes((username || '').toLowerCase());
+  }
+
+  // Toggle admin status: promote if not admin, remove if already admin
+  toggleGroupAdmin(group: any, username: string) {
+    this.groupActionError = '';
+    this.groupActionSuccess = '';
+
+    const isAdmin = this.isGroupAdmin(group, username);
+    if (isAdmin) {
+      // optimistic remove
+      const prev = [...(group.admins || [])];
+      group.admins = (group.admins || []).filter((a: any) => (a || '').toLowerCase() !== (username || '').toLowerCase());
+      try { this.cdr.detectChanges(); } catch (e) {}
+
+      this.api.removeAdminFromGroup(group.id, { username, requester: this.username() }).subscribe({
+        next: () => {
+          this.groupActionSuccess = 'Admin removed from group.';
+        },
+        error: (err: any) => {
+          // rollback
+          group.admins = prev;
+          this.groupActionError = err?.error?.error || 'Failed to remove admin.';
+          try { this.cdr.detectChanges(); } catch (e) {}
+        }
+      });
+    } else {
+      // reuse promote flow (optimistic add)
+      this.promoteToGroupAdmin(group, username);
+    }
   }
 
   logout() {
@@ -162,18 +213,88 @@ export class Dashboard implements OnInit {
     });
   }
 
+  // Request to join a group (called by regular users)
+  requestToJoin(group: any) {
+    if (!this.username()) return;
+    this.groupActionError = '';
+    this.groupActionSuccess = '';
+    this.api.requestJoinGroup(group.id, { username: this.username() }).subscribe({
+      next: () => {
+        this.groupActionSuccess = 'Join request sent to Super Admin.';
+      },
+      error: (err: any) => {
+        this.groupActionError = err?.error?.error || 'Failed to send join request.';
+      }
+    });
+  }
+
+  // Super Admin: fetch pending join requests
+  fetchJoinRequests() {
+    if (!this.isSuper()) return;
+    this.api.listJoinRequests(this.username()).subscribe({
+      next: (res: any) => (this.joinRequests = res.requests || []),
+      error: () => (this.joinRequests = [])
+    });
+  }
+
+  approveRequest(r: any) {
+    this.api.approveRequest(r.id, { requester: this.username() }).subscribe({
+      next: (res: any) => {
+        r.status = 'approved';
+        this.fetchGroups();
+        this.fetchJoinRequests();
+      },
+      error: (err: any) => (this.groupActionError = err?.error?.error || 'Failed to approve request')
+    });
+  }
+
+  denyRequest(r: any) {
+    this.api.denyRequest(r.id, { requester: this.username() }).subscribe({
+      next: () => {
+        r.status = 'denied';
+        this.fetchJoinRequests();
+      },
+      error: (err: any) => (this.groupActionError = err?.error?.error || 'Failed to deny request')
+    });
+  }
+
   addGroup() {
     this.addGroupError = '';
     this.addGroupSuccess = false;
     this.newGroup.ownerUsername = this.username();
+    // optimistic create: add a temporary group locally so UI updates immediately
+    const tempId = 'tmp-' + Date.now();
+    const owner = this.username();
+    const tempGroup = {
+      id: tempId,
+      name: this.newGroup.name,
+      ownerUsername: owner,
+      admins: [owner],
+      members: [owner],
+      channels: [],
+      newMember: '',
+      newChannel: '',
+      displayMembers: [owner]
+    };
+    this.groups = [...(this.groups || []), tempGroup];
+    try { this.cdr.detectChanges(); } catch (e) {}
+
     this.api.addGroup(this.newGroup).subscribe({
       next: (res: any) => {
         this.addGroupSuccess = true;
+        // replace temp group with server group
+        const created = res?.group;
+        if (created) {
+          this.groups = (this.groups || []).map(g => (g.id === tempId ? { ...created, newMember: '', newChannel: '', displayMembers: (created.members || []).filter((m: string) => (m || '').toLowerCase() !== 'super') } : g));
+        }
         this.newGroup = { name: '', ownerUsername: '' };
-  this.fetchGroups();
+        try { this.cdr.detectChanges(); } catch (e) {}
       },
       error: (err: any) => {
         this.addGroupError = err?.error?.error || 'Failed to add group.';
+        // rollback temp group
+        this.groups = (this.groups || []).filter(g => g.id !== tempId);
+        try { this.cdr.detectChanges(); } catch (e) {}
       }
     });
   }
@@ -182,15 +303,27 @@ export class Dashboard implements OnInit {
     this.groupActionError = '';
     this.groupActionSuccess = '';
     if (!group.newMember) return;
-  this.api.addGroupMember(group.id, { username: group.newMember, requester: this.username() }).subscribe({
-      next: (res: any) => {
-  group.members = group.members || [];
-  group.members.push(group.newMember);
-        group.newMember = '';
+    // optimistic add: update UI immediately
+    const username = group.newMember.trim();
+    group.members = group.members || [];
+    const already = group.members.some((m: any) => (m || '').toLowerCase() === username.toLowerCase());
+    if (!already) {
+      group.members = [...group.members, username];
+      group.displayMembers = (group.members || []).filter((m: string) => (m || '').toLowerCase() !== 'super');
+      try { this.cdr.detectChanges(); } catch (e) {}
+    }
+    group.newMember = '';
+
+    this.api.addGroupMember(group.id, { username, requester: this.username() }).subscribe({
+      next: () => {
         this.groupActionSuccess = 'Member added!';
       },
       error: (err: any) => {
+        // rollback
+        group.members = (group.members || []).filter((m: any) => (m || '').toLowerCase() !== username.toLowerCase());
+        group.displayMembers = (group.members || []).filter((m: string) => (m || '').toLowerCase() !== 'super');
         this.groupActionError = err?.error?.error || 'Failed to add member.';
+        try { this.cdr.detectChanges(); } catch (e) {}
       }
     });
   }
@@ -199,15 +332,31 @@ export class Dashboard implements OnInit {
     this.groupActionError = '';
     this.groupActionSuccess = '';
     if (!group.newChannel) return;
-  this.api.addChannel(group.id, { name: group.newChannel, requester: this.username() }).subscribe({
+    // optimistic add
+    const name = group.newChannel.trim();
+    group.channels = group.channels || [];
+    const exists = group.channels.some((c: any) => (c.name || '').toLowerCase() === name.toLowerCase());
+    if (!exists) {
+      const tempChannel = { id: 'tmp-' + Date.now(), name };
+      group.channels = [...group.channels, tempChannel];
+      try { this.cdr.detectChanges(); } catch (e) {}
+    }
+    group.newChannel = '';
+
+    this.api.addChannel(group.id, { name, requester: this.username() }).subscribe({
       next: (res: any) => {
-  group.channels = group.channels || [];
-  group.channels.push({ name: group.newChannel });
-        group.newChannel = '';
+        const ch = res?.channel;
+        if (ch) {
+          group.channels = (group.channels || []).map((c: any) => (c.name === name && c.id && String(c.id).startsWith('tmp') ? ch : c));
+          try { this.cdr.detectChanges(); } catch (e) {}
+        }
         this.groupActionSuccess = 'Channel added!';
       },
       error: (err: any) => {
+        // rollback temp channel
+        group.channels = (group.channels || []).filter((c: any) => (c.name || '').toLowerCase() !== name.toLowerCase() || !(String(c.id || '').startsWith('tmp')));
         this.groupActionError = err?.error?.error || 'Failed to add channel.';
+        try { this.cdr.detectChanges(); } catch (e) {}
       }
     });
   }
@@ -236,13 +385,22 @@ export class Dashboard implements OnInit {
     if (!confirm(`Remove ${username} from ${group.name}?`)) return;
     this.groupActionError = '';
     this.groupActionSuccess = '';
+    // optimistic remove
+    const prev = [...(group.members || [])];
+    group.members = (group.members || []).filter((m: any) => (m || '').toLowerCase() !== (username || '').toLowerCase());
+    group.displayMembers = (group.members || []).filter((m: string) => (m || '').toLowerCase() !== 'super');
+    try { this.cdr.detectChanges(); } catch (e) {}
+
     this.api.removeGroupMember(group.id, { username, requester: this.username() }).subscribe({
-      next: (res: any) => {
-        group.members = group.members.filter((m: any) => m !== username);
+      next: () => {
         this.groupActionSuccess = 'Member removed!';
       },
       error: (err: any) => {
+        // rollback
+        group.members = prev;
+        group.displayMembers = (group.members || []).filter((m: string) => (m || '').toLowerCase() !== 'super');
         this.groupActionError = err?.error?.error || 'Failed to remove member.';
+        try { this.cdr.detectChanges(); } catch (e) {}
       }
     });
   }
@@ -251,14 +409,23 @@ export class Dashboard implements OnInit {
     // This request will require the target user to already have role 'Group Admin' set by Super Admin
     this.groupActionError = '';
     this.groupActionSuccess = '';
+    // optimistic promote
+    group.admins = group.admins || [];
+    const already = group.admins.some((a: any) => (a || '').toLowerCase() === (username || '').toLowerCase());
+    if (!already) {
+      group.admins = [...group.admins, username];
+      try { this.cdr.detectChanges(); } catch (e) {}
+    }
+
     this.api.addAdminToGroup(group.id, { username, requester: this.username() }).subscribe({
-      next: (res: any) => {
-        group.admins = group.admins || [];
-        if (!group.admins.includes(username)) group.admins.push(username);
+      next: () => {
         this.groupActionSuccess = 'Admin assigned to group.';
       },
       error: (err: any) => {
+        // rollback
+        group.admins = (group.admins || []).filter((a: any) => (a || '').toLowerCase() !== (username || '').toLowerCase());
         this.groupActionError = err?.error?.error || 'Failed to assign admin.';
+        try { this.cdr.detectChanges(); } catch (e) {}
       }
     });
   }
@@ -274,6 +441,7 @@ export class Dashboard implements OnInit {
   ngOnInit() {
     this.fetchUsers();
     this.fetchGroups();
+  this.fetchJoinRequests();
   }
 
   addUser() {
@@ -282,8 +450,20 @@ export class Dashboard implements OnInit {
     this.api.addUser(this.newUser).subscribe({
       next: (res: any) => {
         this.addUserSuccess = true;
-        this.newUser = { username: '', email: '', password: '' };
-        this.fetchUsers();
+        // immediate optimistic update so super sees the new user without refreshing
+        const created = res?.user;
+        if (created) {
+          this.users = this.users || [];
+          const exists = this.users.some((u: any) => u.id === created.id || (u.username || '').toLowerCase() === (created.username || '').toLowerCase());
+          if (!exists) {
+            this.users = [...this.users, created];
+            // ensure Angular picks up the change immediately
+            try { this.cdr.detectChanges(); } catch (e) { /* ignore if change detection already running */ }
+          }
+        }
+  this.newUser = { username: '', email: '', password: '' };
+  // keep a background sync to ensure server state is current but avoid immediate overwrite
+  setTimeout(() => this.fetchUsers(), 300);
       },
       error: (err: any) => {
         this.addUserError = err?.error?.error || 'Failed to add user.';

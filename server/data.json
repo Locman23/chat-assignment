@@ -8,6 +8,18 @@
         "Super Admin"
       ],
       "groups": []
+    },
+    {
+      "id": "u1756802173622432",
+      "username": "Alice",
+      "email": "Alice@example.com",
+      "password": "Alice",
+      "roles": [
+        "Group Admin"
+      ],
+      "groups": [
+        "g1756801698828380"
+      ]
     }
   ],
   "groups": [
@@ -16,10 +28,12 @@
       "name": "General",
       "ownerUsername": "super",
       "admins": [
-        "super"
+        "super",
+        "alice"
       ],
       "members": [
-        "super"
+        "super",
+        "alice"
       ],
       "channels": [
         {
@@ -28,5 +42,6 @@
         }
       ]
     }
-  ]
+  ],
+  "joinRequests": []
 }

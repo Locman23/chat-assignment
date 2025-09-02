@@ -46,6 +46,23 @@ export class Api {
     return this.http.post<{ group: any }>(`${this.base}/groups`, payload);
   }
 
+  // Join requests
+  requestJoinGroup(groupId: string, payload: { username: string }) {
+    return this.http.post<{ request: any }>(`${this.base}/groups/${groupId}/requests`, payload);
+  }
+
+  listJoinRequests(requester: string) {
+    return this.http.get<{ requests: any[] }>(`${this.base}/requests?requester=${encodeURIComponent(requester)}`);
+  }
+
+  approveRequest(requestId: string, payload: { requester: string }) {
+    return this.http.put<{ request: any }>(`${this.base}/requests/${requestId}/approve`, payload);
+  }
+
+  denyRequest(requestId: string, payload: { requester: string }) {
+    return this.http.put<{ request: any }>(`${this.base}/requests/${requestId}/deny`, payload);
+  }
+
   deleteGroup(groupId: string, payload?: { requester?: string }) {
     return this.http.request('delete', `${this.base}/groups/${groupId}`, { body: payload || {} });
   }
@@ -56,6 +73,9 @@ export class Api {
 
   addAdminToGroup(groupId: string, payload: { username: string; requester: string }) {
     return this.http.post(`${this.base}/groups/${groupId}/admins`, payload);
+  }
+  removeAdminFromGroup(groupId: string, payload: { username: string; requester: string }) {
+    return this.http.request('delete', `${this.base}/groups/${groupId}/admins`, { body: payload });
   }
   changeUserRole(userId: string, role: string, payload?: { requester?: string }) {
     return this.http.put(`${this.base}/users/${userId}/role`, { role, ...(payload || {}) });

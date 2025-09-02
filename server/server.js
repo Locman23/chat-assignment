@@ -10,10 +10,13 @@ app.use(express.json()); // built-in JSON parser
 // Data file for persistence (JSON)
 const DATA_FILE = path.join(__dirname, 'data.json');
 
+// Join requests will be persisted to the data file
+let joinRequests = [];
+
 function saveData() {
   try {
     const tmp = DATA_FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ users, groups }, null, 2), 'utf8');
+    fs.writeFileSync(tmp, JSON.stringify({ users, groups, joinRequests }, null, 2), 'utf8');
     fs.renameSync(tmp, DATA_FILE);
   } catch (err) {
     console.error('Failed to save data file', err);
@@ -27,6 +30,20 @@ function loadData() {
       const parsed = JSON.parse(raw || '{}');
       if (Array.isArray(parsed.users)) users = parsed.users;
       if (Array.isArray(parsed.groups)) groups = parsed.groups;
+  if (Array.isArray(parsed.joinRequests)) joinRequests = parsed.joinRequests;
+      // Defensive normalization
+      users = (users || []).map(u => ({
+        ...u,
+        groups: Array.isArray(u.groups) ? u.groups : [],
+        roles: Array.isArray(u.roles) ? u.roles : (u.roles ? [u.roles] : [])
+      }));
+      groups = (groups || []).map(g => ({
+        ...g,
+        members: Array.isArray(g.members) ? g.members : [],
+        admins: Array.isArray(g.admins) ? g.admins : [],
+        channels: Array.isArray(g.channels) ? g.channels : []
+      }));
+      joinRequests = Array.isArray(joinRequests) ? joinRequests : [];
     } else {
       // no data file yet — write defaults
       saveData();
@@ -97,6 +114,8 @@ app.put('/api/users/:id/role', (req, res) => {
   const user = getUserById(id);
   if (!user) return res.status(404).json({ error: 'user not found' });
 
+  const prevRoles = Array.isArray(user.roles) ? [...user.roles] : [];
+
   const validRoles = ['Super Admin', 'Group Admin', 'User'];
   if (!validRoles.includes(role)) return res.status(400).json({ error: 'invalid role' });
 
@@ -113,8 +132,41 @@ app.put('/api/users/:id/role', (req, res) => {
   }
 
   user.roles = [role];
+  // If the user was a Group Admin and is no longer a Group Admin, remove them from all group.admins
+  const wasGroupAdmin = prevRoles.includes('Group Admin');
+  const nowGroupAdmin = role === 'Group Admin';
+  if (wasGroupAdmin && !nowGroupAdmin) {
+    const uname = user.username;
+    groups.forEach(g => {
+      if (g.admins) g.admins = g.admins.filter(a => normalize(a) !== normalize(uname));
+    });
+  }
   saveData();
   return res.json({ user });
+});
+
+
+// Remove an admin from a group
+// body: { username, requester }
+app.delete('/api/groups/:gid/admins', (req, res) => {
+  const { gid } = req.params;
+  const { username, requester } = req.body || {};
+  if (!username?.trim()) return res.status(400).json({ error: 'username required' });
+
+  const g = getGroupById(gid);
+  if (!g) return res.status(404).json({ error: 'group not found' });
+
+  const reqUser = getUserByUsername(requester);
+  const isSuper = reqUser && reqUser.roles.includes('Super Admin');
+  const isGroupOwner = normalize(g.ownerUsername) === normalize(requester);
+  if (!isSuper && !isGroupOwner) return res.status(403).json({ error: 'not authorized to remove admins from this group' });
+
+  const exists = (g.admins || []).some(a => normalize(a) === normalize(username));
+  if (!exists) return res.status(404).json({ error: 'admin not found in group' });
+
+  g.admins = (g.admins || []).filter(a => normalize(a) !== normalize(username));
+  saveData();
+  return res.json({ admins: g.admins });
 });
 
 // Delete user
@@ -165,6 +217,8 @@ let groups = [
 // Load persisted data (overrides defaults if data file exists)
 loadData();
 
+const makeRid = () => makeId('r');
+
 // ---------- Helpers ----------
 
 // Case-insensitive username helpers
@@ -183,6 +237,7 @@ const getGroupById = (gid) => groups.find((g) => g.id === gid);
 const attachGroupToUser = (username, gid) => {
   const u = getUserByUsername(username);
   if (!u) return;
+  if (!Array.isArray(u.groups)) u.groups = [];
   if (!u.groups.includes(gid)) u.groups.push(gid);
 };
 
@@ -218,6 +273,89 @@ app.post('/api/groups', (req, res) => {
 
   saveData();
   return res.status(201).json({ group });
+});
+
+// Request to join a group
+// body: { username }
+app.post('/api/groups/:gid/requests', (req, res) => {
+  const { gid } = req.params;
+  const { username } = req.body || {};
+  if (!username?.trim()) return res.status(400).json({ error: 'username required' });
+
+  const g = getGroupById(gid);
+  if (!g) return res.status(404).json({ error: 'group not found' });
+  if (!hasUser(username)) return res.status(404).json({ error: 'user not found' });
+
+  // If already a member, no need to request
+  if (g.members.some(m => normalize(m) === normalize(username))) {
+    return res.status(400).json({ error: 'user already a member' });
+  }
+
+  const exists = joinRequests.some(r => r.gid === gid && normalize(r.username) === normalize(username) && r.status === 'pending');
+  if (exists) return res.status(409).json({ error: 'request already pending' });
+
+  const reqObj = { id: makeRid(), gid, username: username.trim(), status: 'pending', createdAt: Date.now() };
+  joinRequests.push(reqObj);
+  saveData();
+  return res.status(201).json({ request: reqObj });
+});
+
+// List all pending join requests (Super Admin only)
+app.get('/api/requests', (req, res) => {
+  const { requester } = req.query || {};
+  const reqUser = getUserByUsername(requester);
+  const isSuper = reqUser && reqUser.roles.includes('Super Admin');
+  if (!isSuper) return res.status(403).json({ error: 'only Super Admin can list requests' });
+
+  const pending = joinRequests.filter(r => r.status === 'pending');
+  return res.json({ requests: pending });
+});
+
+// Approve a join request (Super Admin only) -> adds user to group
+app.put('/api/requests/:rid/approve', (req, res) => {
+  const { rid } = req.params;
+  const { requester } = req.body || {};
+  const reqUser = getUserByUsername(requester);
+  const isSuper = reqUser && reqUser.roles.includes('Super Admin');
+  if (!isSuper) return res.status(403).json({ error: 'only Super Admin can approve requests' });
+
+  const r = joinRequests.find(x => x.id === rid);
+  if (!r) return res.status(404).json({ error: 'request not found' });
+  if (r.status !== 'pending') return res.status(400).json({ error: 'request already processed' });
+
+  const g = getGroupById(r.gid);
+  if (!g) return res.status(404).json({ error: 'group not found' });
+
+  // add member
+  if (!g.members.some(m => normalize(m) === normalize(r.username))) {
+    g.members.push(r.username);
+    attachGroupToUser(r.username, g.id);
+  }
+
+  r.status = 'approved';
+  r.processedBy = requester;
+  r.processedAt = Date.now();
+  saveData();
+  return res.json({ request: r, members: g.members });
+});
+
+// Deny a join request (Super Admin only)
+app.put('/api/requests/:rid/deny', (req, res) => {
+  const { rid } = req.params;
+  const { requester } = req.body || {};
+  const reqUser = getUserByUsername(requester);
+  const isSuper = reqUser && reqUser.roles.includes('Super Admin');
+  if (!isSuper) return res.status(403).json({ error: 'only Super Admin can deny requests' });
+
+  const r = joinRequests.find(x => x.id === rid);
+  if (!r) return res.status(404).json({ error: 'request not found' });
+  if (r.status !== 'pending') return res.status(400).json({ error: 'request already processed' });
+
+  r.status = 'denied';
+  r.processedBy = requester;
+  r.processedAt = Date.now();
+  saveData();
+  return res.json({ request: r });
 });
 
 // Add a member to a group
