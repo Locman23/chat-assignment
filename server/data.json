@@ -8,6 +8,18 @@
         "Super Admin"
       ],
       "groups": []
+    },
+    {
+      "id": "u1756802173622432",
+      "username": "Alice",
+      "email": "Alice@example.com",
+      "password": "Alice",
+      "roles": [
+        "User"
+      ],
+      "groups": [
+        "g1756801698828380"
+      ]
     }
   ],
   "groups": [
@@ -19,7 +31,8 @@
         "super"
       ],
       "members": [
-        "super"
+        "super",
+        "Alice"
       ],
       "channels": [
         {
@@ -27,6 +40,17 @@
           "name": "general"
         }
       ]
+    }
+  ],
+  "joinRequests": [
+    {
+      "id": "r1756803667853900",
+      "gid": "g1756801698828380",
+      "username": "Alice",
+      "status": "approved",
+      "createdAt": 1756803667853,
+      "processedBy": "super",
+      "processedAt": 1756803676136
     }
   ]
 }
