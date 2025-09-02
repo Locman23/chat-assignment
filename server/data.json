@@ -17,7 +17,9 @@
       "roles": [
         "User"
       ],
-      "groups": []
+      "groups": [
+        "g1756801698828380"
+      ]
     }
   ],
   "groups": [
@@ -29,7 +31,8 @@
         "super"
       ],
       "members": [
-        "super"
+        "super",
+        "alice"
       ],
       "channels": [
         {
@@ -56,6 +59,15 @@
       "createdAt": 1756803667853,
       "processedBy": "super",
       "processedAt": 1756803676136
+    },
+    {
+      "id": "r1756805731686233",
+      "gid": "g1756801698828380",
+      "username": "alice",
+      "status": "approved",
+      "createdAt": 1756805731686,
+      "processedBy": "super",
+      "processedAt": 1756805742226
     }
   ]
 }
