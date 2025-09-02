@@ -6,6 +6,7 @@ This repository contains a minimal chat management prototype:
 - In-memory data structures persisted to `server/data.json` after each change.
 
 This README documents repository layout, design / version-control approach, main data structures, REST routes and expected behaviour, and the Angular architecture.
+
 ---
 
 ## Repository layout
