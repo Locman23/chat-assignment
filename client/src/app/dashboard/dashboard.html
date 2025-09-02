@@ -81,13 +81,17 @@
               <li *ngFor="let member of (group.displayMembers || [])">
                 {{ member }}
                 <button *ngIf="canAdminGroup(group) && member !== group.ownerUsername" class="btn btn-sm mr-2" (click)="removeMemberFromGroup(group, member)">Remove</button>
-                <button *ngIf="(isSuper() || isGroupOwner(group)) && member !== group.ownerUsername" class="btn btn-sm" (click)="promoteToGroupAdmin(group, member)">Make Admin</button>
+                <button *ngIf="(isSuper() || isGroupOwner(group)) && member !== group.ownerUsername" class="btn btn-sm" (click)="toggleGroupAdmin(group, member)" [attr.aria-label]="isGroupAdmin(group, member) ? 'Remove admin ' + member : 'Make admin ' + member">{{ isGroupAdmin(group, member) ? 'Remove Admin' : 'Make Admin' }}</button>
               </li>
             </ul>
             <form *ngIf="canAdminGroup(group)" (ngSubmit)="addMemberToGroup(group)" #addMemberForm="ngForm" class="form-inline mt-2">
               <input class="input small-w" name="username" [(ngModel)]="group.newMember" placeholder="Add member..." required />
               <button class="btn btn-sm" type="submit" [disabled]="addMemberForm.invalid">Add</button>
             </form>
+            <!-- Request to join if not a member -->
+            <div *ngIf="!isSuper() && !isMember(group)" class="mt-2">
+              <button class="btn btn-sm" (click)="requestToJoin(group)" aria-label="Request to join {{ group.name }}">Request to join</button>
+            </div>
           </td>
           <td>
             <ul class="compact-list">
@@ -107,6 +111,34 @@
     </table>
     <div *ngIf="groupActionError" class="msg msg-error">{{ groupActionError }}</div>
     <div *ngIf="groupActionSuccess" class="msg msg-success">{{ groupActionSuccess }}</div>
+  </section>
+
+  <!-- Super Admin: pending join requests -->
+  <section *ngIf="isSuper()" class="panel panel-wide mt-4">
+    <h3>Pending Join Requests</h3>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Request ID</th>
+          <th>User</th>
+          <th>Group</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let r of joinRequests">
+          <td>{{ r.id }}</td>
+          <td>{{ r.username }}</td>
+          <td>{{ getGroupNameById(r.gid) }}</td>
+          <td>{{ r.createdAt | date:'short' }}</td>
+          <td>
+            <button class="btn btn-sm mr-2" (click)="approveRequest(r)">Approve</button>
+            <button class="btn btn-sm btn-danger" (click)="denyRequest(r)">Deny</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </section>
 <!-- end dashboard -->
 
