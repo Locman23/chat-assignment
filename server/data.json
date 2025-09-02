@@ -15,7 +15,7 @@
       "email": "alice.com",
       "password": "alice",
       "roles": [
-        "User"
+        "Group Admin"
       ],
       "groups": [
         "g1756801698828380"
@@ -28,7 +28,8 @@
       "name": "General",
       "ownerUsername": "super",
       "admins": [
-        "super"
+        "super",
+        "alice"
       ],
       "members": [
         "super",
