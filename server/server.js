@@ -19,11 +19,6 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 // Join requests will be persisted to the data file
 let joinRequests = [];
 
-/**
- * Persist in-memory data to disk atomically.
- * Writes a temporary file and renames it over the real data file to reduce
- * the risk of partial writes.
- */
 function saveData() {
   try {
     const tmp = DATA_FILE + '.tmp';
@@ -34,11 +29,6 @@ function saveData() {
   }
 }
 
-/**
- * Load persisted data from disk and normalise structures.
- * This will override the in-memory defaults if the data file exists.
- * Defensive normalisation ensures older or trimmed data does not crash the server.
- */
 function loadData() {
   try {
     if (fs.existsSync(DATA_FILE)) {
@@ -47,7 +37,6 @@ function loadData() {
       if (Array.isArray(parsed.users)) users = parsed.users;
       if (Array.isArray(parsed.groups)) groups = parsed.groups;
   if (Array.isArray(parsed.joinRequests)) joinRequests = parsed.joinRequests;
-      // Defensive normalization
       users = (users || []).map(u => ({
         ...u,
         groups: Array.isArray(u.groups) ? u.groups : [],

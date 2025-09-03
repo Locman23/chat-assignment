@@ -12,14 +12,54 @@
     {
       "id": "u1756805382286321",
       "username": "alice",
-      "email": "alice.com",
+      "email": "alice@example.com",
       "password": "alice",
       "roles": [
-        "Group Admin"
+        "User"
       ],
       "groups": [
         "g1756801698828380"
       ]
+    },
+    {
+      "id": "u175694260659653",
+      "username": "bob",
+      "email": "bob@example.com",
+      "password": "bob",
+      "roles": [
+        "User"
+      ],
+      "groups": []
+    },
+    {
+      "id": "u1756942615472677",
+      "username": "cat",
+      "email": "cat@example.com",
+      "password": "cat",
+      "roles": [
+        "User"
+      ],
+      "groups": []
+    },
+    {
+      "id": "u1756942625116528",
+      "username": "david",
+      "email": "david@example.com",
+      "password": "david",
+      "roles": [
+        "User"
+      ],
+      "groups": []
+    },
+    {
+      "id": "u1756942640070114",
+      "username": "ethan",
+      "email": "ethan@example.com",
+      "password": "ethan",
+      "roles": [
+        "User"
+      ],
+      "groups": []
     }
   ],
   "groups": [
@@ -28,8 +68,7 @@
       "name": "General",
       "ownerUsername": "super",
       "admins": [
-        "super",
-        "alice"
+        "super"
       ],
       "members": [
         "super",
