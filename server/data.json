@@ -23,8 +23,7 @@
       ],
       "groups": [
         "g1756801698828380",
-        "g1756942701606192",
-        "g1756942936155136"
+        "g1756942701606192"
       ]
     },
     {
@@ -35,7 +34,9 @@
       "roles": [
         "User"
       ],
-      "groups": []
+      "groups": [
+        "g1756942704835312"
+      ]
     },
     {
       "id": "u1756942615472677",
@@ -122,7 +123,8 @@
         "super"
       ],
       "members": [
-        "super"
+        "super",
+        "bob"
       ],
       "channels": [
         {
@@ -147,18 +149,6 @@
           "name": "Main3"
         }
       ]
-    },
-    {
-      "id": "g1756942936155136",
-      "name": "New Group",
-      "ownerUsername": "alice",
-      "admins": [
-        "alice"
-      ],
-      "members": [
-        "alice"
-      ],
-      "channels": []
     }
   ],
   "joinRequests": [
