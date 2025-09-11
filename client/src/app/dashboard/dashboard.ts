@@ -165,7 +165,7 @@ export class Dashboard implements OnInit {
   fetchGroups(): void {
     this.api.getGroups().subscribe({
       next: (res: any) => {
-  this.groups = res.groups || [];
+        this.groups = res.groups || [];
 
         // initialize helpers and fetch members/channels per group
         this.groups.forEach((group) => {
@@ -211,16 +211,10 @@ export class Dashboard implements OnInit {
   // Keep only groups visible to the current user unless Super Admin
   applyGroupVisibilityFilter() {
   // No-op: show all groups to authenticated users so they can request to join.
-  // Former behaviour filtered out groups the user wasn't a member of; changed to
-  // allow visibility of available groups and expose the Request-to-Join action.
   return;
   }
 
   // Request to join a group (called by regular users)
-  /**
-   * Create a join request for the current user to the supplied group.
-   * The server stores requests persistently and Super Admin can approve/deny.
-   */
   requestToJoin(group: any) {
     if (!this.username()) return;
     this.groupActionError = '';
@@ -376,7 +370,7 @@ export class Dashboard implements OnInit {
     if (!confirm(`Delete group ${group.name}?`)) return;
     this.groupActionError = '';
     this.groupActionSuccess = '';
-  this.api.deleteGroup(group.id, { requester: this.username() }).subscribe({
+    this.api.deleteGroup(group.id, { requester: this.username() }).subscribe({
       next: () => {
         this.groupActionSuccess = 'Group deleted!';
         this.groups = this.groups.filter((g: any) => g.id !== group.id);
@@ -453,7 +447,7 @@ export class Dashboard implements OnInit {
   ngOnInit() {
     this.fetchUsers();
     this.fetchGroups();
-  this.fetchJoinRequests();
+    this.fetchJoinRequests();
   }
 
   addUser() {
