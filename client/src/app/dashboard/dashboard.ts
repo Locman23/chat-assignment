@@ -263,7 +263,7 @@ export class Dashboard implements OnInit {
     this.addGroupError = '';
     this.addGroupSuccess = false;
     this.newGroup.ownerUsername = this.username();
-    // optimistic create: add a temporary group locally so UI updates immediately
+    
     const tempId = 'tmp-' + Date.now();
     const owner = this.username();
     const tempGroup = {
@@ -386,7 +386,6 @@ export class Dashboard implements OnInit {
     if (!confirm(`Remove ${username} from ${group.name}?`)) return;
     this.groupActionError = '';
     this.groupActionSuccess = '';
-    // optimistic remove
     const prev = [...(group.members || [])];
     group.members = (group.members || []).filter((m: any) => (m || '').toLowerCase() !== (username || '').toLowerCase());
     group.displayMembers = (group.members || []).filter((m: string) => (m || '').toLowerCase() !== 'super');
@@ -407,15 +406,9 @@ export class Dashboard implements OnInit {
   }
 
   promoteToGroupAdmin(group: any, username: string) {
-    /**
-     * Promote a group member to a group admin.
-     * Note: the server requires the target user to already have the 'Group Admin' role
-     * (promoted by a Super Admin) before they can be assigned as a group admin.
-     * This method performs an optimistic UI update and rolls back on failure.
-     */
     this.groupActionError = '';
     this.groupActionSuccess = '';
-    // optimistic promote
+
     group.admins = group.admins || [];
     const already = group.admins.some((a: any) => (a || '').toLowerCase() === (username || '').toLowerCase());
     if (!already) {

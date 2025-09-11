@@ -7,19 +7,66 @@
       "roles": [
         "Super Admin"
       ],
-      "groups": []
+      "groups": [
+        "g1756942701606192",
+        "g1756942704835312",
+        "g1756942707864865"
+      ]
     },
     {
       "id": "u1756805382286321",
       "username": "alice",
-      "email": "alice.com",
+      "email": "alice@example.com",
       "password": "alice",
       "roles": [
         "Group Admin"
       ],
       "groups": [
-        "g1756801698828380"
+        "g1756801698828380",
+        "g1756942701606192"
       ]
+    },
+    {
+      "id": "u175694260659653",
+      "username": "bob",
+      "email": "bob@example.com",
+      "password": "bob",
+      "roles": [
+        "User"
+      ],
+      "groups": [
+        "g1756942704835312"
+      ]
+    },
+    {
+      "id": "u1756942615472677",
+      "username": "cat",
+      "email": "cat@example.com",
+      "password": "cat",
+      "roles": [
+        "User"
+      ],
+      "groups": []
+    },
+    {
+      "id": "u1756942625116528",
+      "username": "david",
+      "email": "david@example.com",
+      "password": "david",
+      "roles": [
+        "User"
+      ],
+      "groups": []
+    },
+    {
+      "id": "u1756942640070114",
+      "username": "ethan",
+      "email": "ethan@example.com",
+      "password": "ethan",
+      "roles": [
+        "User"
+      ],
+      "groups": []
     }
   ],
   "groups": [
@@ -28,8 +75,7 @@
       "name": "General",
       "ownerUsername": "super",
       "admins": [
-        "super",
-        "alice"
+        "super"
       ],
       "members": [
         "super",
@@ -47,6 +93,60 @@
         {
           "id": "c1756804611101428",
           "name": "2"
+        }
+      ]
+    },
+    {
+      "id": "g1756942701606192",
+      "name": "Group1",
+      "ownerUsername": "super",
+      "admins": [
+        "super",
+        "alice"
+      ],
+      "members": [
+        "super",
+        "alice"
+      ],
+      "channels": [
+        {
+          "id": "c1756942723030817",
+          "name": "Main"
+        }
+      ]
+    },
+    {
+      "id": "g1756942704835312",
+      "name": "Group2",
+      "ownerUsername": "super",
+      "admins": [
+        "super"
+      ],
+      "members": [
+        "super",
+        "bob"
+      ],
+      "channels": [
+        {
+          "id": "c1756942730652657",
+          "name": "Main2"
+        }
+      ]
+    },
+    {
+      "id": "g1756942707864865",
+      "name": "Group3",
+      "ownerUsername": "super",
+      "admins": [
+        "super"
+      ],
+      "members": [
+        "super"
+      ],
+      "channels": [
+        {
+          "id": "c1756942734499592",
+          "name": "Main3"
         }
       ]
     }
@@ -69,6 +169,33 @@
       "createdAt": 1756805731686,
       "processedBy": "super",
       "processedAt": 1756805742226
+    },
+    {
+      "id": "r1756942807649788",
+      "gid": "g1756942701606192",
+      "username": "alice",
+      "status": "approved",
+      "createdAt": 1756942807649,
+      "processedBy": "super",
+      "processedAt": 1756942821861
+    },
+    {
+      "id": "r1756942813498601",
+      "gid": "g1756942704835312",
+      "username": "alice",
+      "status": "approved",
+      "createdAt": 1756942813498,
+      "processedBy": "super",
+      "processedAt": 1756942826034
+    },
+    {
+      "id": "r1756942904075246",
+      "gid": "g1756942701606192",
+      "username": "alice",
+      "status": "approved",
+      "createdAt": 1756942904075,
+      "processedBy": "super",
+      "processedAt": 1756942911482
     }
   ]
 }

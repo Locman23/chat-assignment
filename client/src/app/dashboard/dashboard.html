@@ -91,15 +91,17 @@
               <button class="btn btn-sm" (click)="requestToJoin(group)" aria-label="Request to join {{ group.name }}">Request to join</button>
             </div>
           </td>
-          <td>
-            <ul class="compact-list">
-              <li *ngFor="let channel of group.channels">{{ channel.name }}</li>
-            </ul>
-            <form *ngIf="canAdminGroup(group)" (ngSubmit)="addChannelToGroup(group)" #addChannelForm="ngForm" class="form-inline mt-2">
-              <input class="input small-w" name="name" [(ngModel)]="group.newChannel" placeholder="Add channel..." required />
-              <button class="btn btn-sm" type="submit" [disabled]="addChannelForm.invalid">Add</button>
-            </form>
-          </td>
+            <td>
+              <ng-container *ngIf="isMember(group)">
+                <ul class="compact-list">
+                  <li *ngFor="let channel of group.channels">{{ channel.name }}</li>
+                </ul>
+                <form *ngIf="canAdminGroup(group)" (ngSubmit)="addChannelToGroup(group)" #addChannelForm="ngForm" class="form-inline mt-2">
+                  <input class="input small-w" name="name" [(ngModel)]="group.newChannel" placeholder="Add channel..." required />
+                  <button class="btn btn-sm" type="submit" [disabled]="addChannelForm.invalid">Add</button>
+                </form>
+              </ng-container>
+            </td>
           <td>
             <button *ngIf="canAdminGroup(group)" class="btn btn-sm mr-2" (click)="editGroup(group)">Edit</button>
             <button *ngIf="canAdminGroup(group)" class="btn btn-sm btn-danger" (click)="deleteGroup(group)">Delete</button>
