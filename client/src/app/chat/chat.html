@@ -1,26 +1,59 @@
-<section class="panel panel-wide">
-  <h2>Chat</h2>
-  <p class="muted">Groups and channels (read-only view). Click a channel to open chat (not implemented).</p>
-
-  <div *ngIf="!groups || groups.length === 0" class="msg msg-muted">No groups available.</div>
-
-  <div *ngFor="let g of groups" class="panel mt-2">
-    <h3>{{ g.name }}</h3>
-    <div class="muted">Owner: {{ g.ownerUsername }}</div>
-    <div class="mt-2">
-      <strong>Members</strong>
-      <ul class="compact-list">
-        <li *ngFor="let m of displayMembers(g)">{{ m }}</li>
-      </ul>
+<section class="chat-layout">
+  <!-- Sidebar: groups and channels -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h3>Groups</h3>
     </div>
 
-    <div class="mt-2">
-      <strong>Channels</strong>
-      <ul class="compact-list">
-        <li *ngFor="let c of (g.channels || [])">
-          <button class="btn btn-link" disabled aria-disabled="true">{{ c.name }}</button>
+    <div class="group-list" *ngIf="visibleGroups().length; else noGroups">
+      <div class="group-item" *ngFor="let g of visibleGroups()">
+        <button class="group-btn" [class.active]="g.id === selectedGroupId" (click)="selectGroup(g.id)">
+          <span class="group-name">{{ g.name }}</span>
+        </button>
+        <!-- Channels only visible if member (super sees all groups but we still require membership to view channels) -->
+        <ul class="channel-list" *ngIf="isMember(g)">
+          <li *ngFor="let c of (g.channels || [])">
+            <button class="channel-btn" [class.active]="c.id === selectedChannelId && g.id === selectedGroupId" (click)="selectChannelOfGroup(g.id, c.id)">
+              # {{ c.name }}
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <ng-template #noGroups>
+      <div class="muted small">No groups available or you are not a member of any group.</div>
+    </ng-template>
+  </aside>
+
+  <!-- Main chat area -->
+  <main class="chat">
+    <div class="chat-header">
+      <h2 *ngIf="selectedGroup as sg; else chooseGroup">
+        {{ sg.name }}
+        <span class="muted" *ngIf="selectedChannel as sc">/ #{{ sc?.name }}</span>
+      </h2>
+      <ng-template #chooseGroup><h2>Select a group</h2></ng-template>
+      <div class="muted small" *ngIf="statusMsg">{{ statusMsg }}</div>
+      <div class="msg msg-error" *ngIf="errorMsg">{{ errorMsg }}</div>
+    </div>
+
+    <div class="chat-body">
+      <div *ngIf="!selectedGroupId || !selectedChannelId" class="msg msg-muted">
+        Pick a channel to start chatting. Messages will appear here.
+      </div>
+
+      <ul *ngIf="selectedGroupId && selectedChannelId" class="message-list">
+        <li *ngFor="let m of messages" class="message">
+          <span class="author">{{ m.username }}</span>
+          <span class="text">{{ m.text }}</span>
+          <span class="time">{{ m.ts | date:'shortTime' }}</span>
         </li>
       </ul>
     </div>
-  </div>
+
+    <form class="chat-input" (ngSubmit)="onSend()">
+      <input class="input" type="text" placeholder="Message" [(ngModel)]="messageText" name="message" [disabled]="!selectedGroupId || !selectedChannelId" />
+      <button class="btn" type="submit" [disabled]="!messageText || !selectedGroupId || !selectedChannelId">Send</button>
+    </form>
+  </main>
 </section>
