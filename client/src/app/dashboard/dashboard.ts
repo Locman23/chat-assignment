@@ -165,7 +165,7 @@ export class Dashboard implements OnInit {
   fetchGroups(): void {
     this.api.getGroups().subscribe({
       next: (res: any) => {
-  this.groups = res.groups || [];
+        this.groups = res.groups || [];
 
         // initialize helpers and fetch members/channels per group
         this.groups.forEach((group) => {
@@ -211,16 +211,10 @@ export class Dashboard implements OnInit {
   // Keep only groups visible to the current user unless Super Admin
   applyGroupVisibilityFilter() {
   // No-op: show all groups to authenticated users so they can request to join.
-  // Former behaviour filtered out groups the user wasn't a member of; changed to
-  // allow visibility of available groups and expose the Request-to-Join action.
   return;
   }
 
   // Request to join a group (called by regular users)
-  /**
-   * Create a join request for the current user to the supplied group.
-   * The server stores requests persistently and Super Admin can approve/deny.
-   */
   requestToJoin(group: any) {
     if (!this.username()) return;
     this.groupActionError = '';
@@ -269,7 +263,7 @@ export class Dashboard implements OnInit {
     this.addGroupError = '';
     this.addGroupSuccess = false;
     this.newGroup.ownerUsername = this.username();
-    // optimistic create: add a temporary group locally so UI updates immediately
+    
     const tempId = 'tmp-' + Date.now();
     const owner = this.username();
     const tempGroup = {
@@ -376,7 +370,7 @@ export class Dashboard implements OnInit {
     if (!confirm(`Delete group ${group.name}?`)) return;
     this.groupActionError = '';
     this.groupActionSuccess = '';
-  this.api.deleteGroup(group.id, { requester: this.username() }).subscribe({
+    this.api.deleteGroup(group.id, { requester: this.username() }).subscribe({
       next: () => {
         this.groupActionSuccess = 'Group deleted!';
         this.groups = this.groups.filter((g: any) => g.id !== group.id);
@@ -392,7 +386,6 @@ export class Dashboard implements OnInit {
     if (!confirm(`Remove ${username} from ${group.name}?`)) return;
     this.groupActionError = '';
     this.groupActionSuccess = '';
-    // optimistic remove
     const prev = [...(group.members || [])];
     group.members = (group.members || []).filter((m: any) => (m || '').toLowerCase() !== (username || '').toLowerCase());
     group.displayMembers = (group.members || []).filter((m: string) => (m || '').toLowerCase() !== 'super');
@@ -413,15 +406,9 @@ export class Dashboard implements OnInit {
   }
 
   promoteToGroupAdmin(group: any, username: string) {
-    /**
-     * Promote a group member to a group admin.
-     * Note: the server requires the target user to already have the 'Group Admin' role
-     * (promoted by a Super Admin) before they can be assigned as a group admin.
-     * This method performs an optimistic UI update and rolls back on failure.
-     */
     this.groupActionError = '';
     this.groupActionSuccess = '';
-    // optimistic promote
+
     group.admins = group.admins || [];
     const already = group.admins.some((a: any) => (a || '').toLowerCase() === (username || '').toLowerCase());
     if (!already) {
@@ -453,7 +440,7 @@ export class Dashboard implements OnInit {
   ngOnInit() {
     this.fetchUsers();
     this.fetchGroups();
-  this.fetchJoinRequests();
+    this.fetchJoinRequests();
   }
 
   addUser() {
