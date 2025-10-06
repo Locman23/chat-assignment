@@ -1,5 +1,6 @@
 const { Server } = require('socket.io');
 const { getCollections, normalize } = require('./db/mongo');
+const { saveMessage, history } = require('./services/messageStore');
 
 async function getUserByUsername(username) {
   if (!username) return null;
@@ -50,7 +51,9 @@ function initSockets(httpServer) {
         socket.data = { username, groupId, channelId, room: rid };
         socket.join(rid);
         console.log('[io] join', { sid: socket.id, username, groupId, channelId, rid });
-        ack && ack({ ok: true });
+        // Load recent history (default 50) and include in ack
+        const recent = await history(groupId, channelId, { limit: 50 });
+        ack && ack({ ok: true, history: recent });
       } catch (e) {
         console.error('[io] join error', e);
         ack && ack({ ok: false, error: 'join failed' });
@@ -71,16 +74,22 @@ function initSockets(httpServer) {
       const g = await getGroupById(groupId);
       if (!(await canJoinGroup(username, g))) return ack && ack({ ok: false, error: 'not a member' });
       const msg = {
-        id: Date.now().toString(),
+        id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
         username: String(username || 'unknown'),
         groupId,
         channelId,
         text: String(text || ''),
         ts: Date.now()
       };
-      io.to(room).emit('chat:message', msg);
-      console.log('[io] msg', { room, username, text: msg.text });
-      ack && ack({ ok: true, message: msg });
+      try {
+        await saveMessage(msg);
+        io.to(room).emit('chat:message', msg);
+        console.log('[io] msg', { room, username, text: msg.text });
+        ack && ack({ ok: true, message: msg });
+      } catch (persistErr) {
+        console.error('[io] persist error', persistErr);
+        ack && ack({ ok: false, error: 'persist failed' });
+      }
     });
   });
 

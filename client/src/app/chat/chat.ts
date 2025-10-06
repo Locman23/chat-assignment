@@ -128,6 +128,10 @@ export class Chat implements OnInit {
       const g = this.selectedGroup as any;
       const c = this.selectedChannel as any;
       this.statusMsg = `Joined ${g?.name || this.selectedGroupId} / #${c?.name || this.selectedChannelId}`;
+      if (Array.isArray(ack.history)) {
+        // Replace messages array with persisted history
+        this.messages = ack.history.map(h => ({ id: h.id, username: h.username, text: h.text, ts: h.ts }));
+      }
     }
   }
 

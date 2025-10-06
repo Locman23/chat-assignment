@@ -45,7 +45,7 @@ export class SocketService {
     return this.message$.asObservable();
   }
 
-  join(username: string, groupId: string, channelId: string): Promise<{ ok: boolean; error?: string }> {
+  join(username: string, groupId: string, channelId: string): Promise<{ ok: boolean; error?: string; history?: ChatMessage[] }> {
     return new Promise((resolve) => {
       this.socket?.emit('chat:join', { username, groupId, channelId }, (ack: any) => {
         // eslint-disable-next-line no-console

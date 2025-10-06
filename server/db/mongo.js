@@ -39,9 +39,15 @@ function getCollections() {
   return collections;
 }
 
+function getDb() {
+  if (!db) throw new Error('Mongo not connected yet');
+  return db;
+}
+
 module.exports = {
   connectMongo,
   getCollections,
+  getDb,
   makeId,
   makeGid,
   makeCid,
