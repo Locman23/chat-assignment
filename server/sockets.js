@@ -1,15 +1,22 @@
 const { Server } = require('socket.io');
-const { getGroupById, getUserByUsername, normalize } = require('./dataStore');
+const { getCollections, normalize } = require('./db/mongo');
+
+async function getUserByUsername(username) {
+  if (!username) return null;
+  const { users } = getCollections();
+  return users.findOne({ username: { $regex: `^${normalize(username)}$`, $options: 'i' } });
+}
+async function getGroupById(gid) { const { groups } = getCollections(); return groups.findOne({ id: gid }); }
 
 function roomId(groupId, channelId) {
   return `${groupId}:${channelId}`;
 }
 
-function canJoinGroup(username, group) {
+async function canJoinGroup(username, group) {
   if (!group) return false;
-  const user = getUserByUsername(username);
+  const user = await getUserByUsername(username);
   if (!user) return false;
-  const isSuper = (user.roles || []).some((r) => r === 'Super Admin');
+  const isSuper = (user.roles || []).some(r => r === 'Super Admin');
   const isMember = (group.members || []).map(normalize).includes(normalize(username));
   return isSuper || isMember;
 }
@@ -28,11 +35,11 @@ function initSockets(httpServer) {
   io.on('connection', (socket) => {
     console.log('[io] client connected', socket.id);
     // Client should provide { username, groupId, channelId }
-    socket.on('chat:join', ({ username, groupId, channelId }, ack) => {
+    socket.on('chat:join', async ({ username, groupId, channelId }, ack) => {
       try {
-        const g = getGroupById(groupId);
+        const g = await getGroupById(groupId);
         if (!g) return ack && ack({ ok: false, error: 'group not found' });
-        if (!canJoinGroup(username, g)) return ack && ack({ ok: false, error: 'not a member of this group' });
+        if (!(await canJoinGroup(username, g))) return ack && ack({ ok: false, error: 'not a member of this group' });
         if (!channelExists(g, channelId)) return ack && ack({ ok: false, error: 'channel not found' });
 
         // Leave previous room if any
@@ -58,11 +65,11 @@ function initSockets(httpServer) {
     });
 
     // Client sends { text }
-    socket.on('chat:message', ({ text }, ack) => {
+    socket.on('chat:message', async ({ text }, ack) => {
       const { username, groupId, channelId, room } = socket.data || {};
       if (!room || !groupId || !channelId) return ack && ack({ ok: false, error: 'not in a room' });
-      const g = getGroupById(groupId);
-      if (!canJoinGroup(username, g)) return ack && ack({ ok: false, error: 'not a member' });
+      const g = await getGroupById(groupId);
+      if (!(await canJoinGroup(username, g))) return ack && ack({ ok: false, error: 'not a member' });
       const msg = {
         id: Date.now().toString(),
         username: String(username || 'unknown'),
