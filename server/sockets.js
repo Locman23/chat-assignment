@@ -33,19 +33,45 @@ function initSockets(httpServer) {
     cors: { origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] }
   });
 
+    async function emitSystem(ioRef, room, { groupId, channelId }, text) {
+      if (!room) return;
+      console.log('[io][system] attempt', { room, groupId, channelId, text });
+      const msg = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        username: 'system',
+        groupId,
+        channelId,
+        text,
+        ts: Date.now()
+      };
+      try {
+        await saveMessage(msg);
+        ioRef.to(room).emit('chat:message', msg);
+        console.log('[io][system] sent');
+      } catch (e) {
+        console.error('[io] system message persist error', e);
+      }
+    }
+
   io.on('connection', (socket) => {
-    console.log('[io] client connected', socket.id);
+  console.log('[io] client connected', socket.id);
     // Client should provide { username, groupId, channelId }
     socket.on('chat:join', async ({ username, groupId, channelId }, ack) => {
       try {
+  console.log('[io][join] attempt', { sid: socket.id, username, groupId, channelId });
         const g = await getGroupById(groupId);
-        if (!g) return ack && ack({ ok: false, error: 'group not found' });
-        if (!(await canJoinGroup(username, g))) return ack && ack({ ok: false, error: 'not a member of this group' });
-        if (!channelExists(g, channelId)) return ack && ack({ ok: false, error: 'channel not found' });
+  if (!g) { console.warn('[io][join] group not found'); return ack && ack({ ok: false, error: 'group not found' }); }
+  if (!(await canJoinGroup(username, g))) { console.warn('[io][join] membership denied'); return ack && ack({ ok: false, error: 'not a member of this group' }); }
+  if (!channelExists(g, channelId)) { console.warn('[io][join] channel not found'); return ack && ack({ ok: false, error: 'channel not found' }); }
 
         // Leave previous room if any
         const prev = socket.data?.room;
-        if (prev) socket.leave(prev);
+        if (prev) {
+          // send system leave before actually leaving so others in that room receive it
+          const { groupId: pgid, channelId: pcid, username: prevUser } = socket.data || {};
+            await emitSystem(io, prev, { groupId: pgid, channelId: pcid }, `${prevUser || 'A user'} left the channel`);
+          socket.leave(prev);
+        }
 
         const rid = roomId(groupId, channelId);
         socket.data = { username, groupId, channelId, room: rid };
@@ -54,17 +80,35 @@ function initSockets(httpServer) {
         // Load recent history (default 50) and include in ack
         const recent = await history(groupId, channelId, { limit: 50 });
         ack && ack({ ok: true, history: recent });
+        // Broadcast system join (async, after ack so client can render history first)
+        emitSystem(io, rid, { groupId, channelId }, `${username} joined the channel`).catch(()=>{});
       } catch (e) {
         console.error('[io] join error', e);
         ack && ack({ ok: false, error: 'join failed' });
       }
     });
 
-    socket.on('chat:leave', (_payload, ack) => {
+    socket.on('chat:leave', async (_payload, ack) => {
       const prev = socket.data?.room;
-      if (prev) socket.leave(prev);
+      if (prev) {
+        const { groupId: pgid, channelId: pcid, username: prevUser } = socket.data || {};
+        await emitSystem(io, prev, { groupId: pgid, channelId: pcid }, `${prevUser || 'A user'} left the channel`);
+        socket.leave(prev);
+      }
       socket.data = {};
       ack && ack({ ok: true });
+    });
+
+    socket.on('disconnect', async () => {
+      try {
+        const prev = socket.data?.room;
+        if (prev) {
+          const { groupId, channelId, username } = socket.data || {};
+          await emitSystem(io, prev, { groupId, channelId }, `${username || 'A user'} left the channel`);
+        }
+      } catch (e) {
+        console.error('[io] disconnect system message failed', e);
+      }
     });
 
     // Client sends { text }
@@ -92,6 +136,8 @@ function initSockets(httpServer) {
       }
     });
   });
+
+  // (Global disconnect handler removed; per-socket disconnect is inside connection scope.)
 
   return io;
 }

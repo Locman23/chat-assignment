@@ -43,10 +43,15 @@
       </div>
 
       <ul *ngIf="selectedGroupId && selectedChannelId" class="message-list">
-        <li *ngFor="let m of messages" class="message">
-          <span class="author">{{ m.username }}</span>
-          <span class="text">{{ m.text }}</span>
-          <span class="time">{{ m.ts | date:'shortTime' }}</span>
+        <li *ngFor="let m of messages" class="message" [class.system]="m.username === 'system'">
+          <ng-container *ngIf="m.username !== 'system'; else systemMsg">
+            <span class="author">{{ m.username }}</span>
+            <span class="text">{{ m.text }}</span>
+            <span class="time">{{ m.ts | date:'shortTime' }}</span>
+          </ng-container>
+          <ng-template #systemMsg>
+            <span class="system-text">{{ m.text }} <span class="time">{{ m.ts | date:'shortTime' }}</span></span>
+          </ng-template>
         </li>
       </ul>
     </div>
