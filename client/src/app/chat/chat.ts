@@ -32,6 +32,8 @@ export class Chat implements OnInit, AfterViewInit {
   @ViewChild('scrollContainer') private scrollContainer?: ElementRef<HTMLDivElement>;
   private atBottom = true; // tracks if user is near the bottom (eligible for auto-scroll)
   private historyLoaded = false;
+  hasMore = true; // assume there may be older messages until proven otherwise
+  loadingOlder = false;
 
   constructor(private api: Api, private auth: Auth, private sockets: SocketService) {}
 
@@ -162,6 +164,9 @@ export class Chat implements OnInit, AfterViewInit {
         this.historyLoaded = true;
         // Always scroll on initial history load for a room
         this.deferScrollToBottom();
+        // After initial load we cannot know if more exist; defer until user presses load older
+        // Basic heuristic: if we received fewer than 50 messages, assume no more
+        this.hasMore = this.messages.length >= 50; // 50 is the server default
       }
       // Request roster explicitly (in addition to push) as a safety net
       this.sockets.requestRoster().then(ack => {
@@ -179,6 +184,45 @@ export class Chat implements OnInit, AfterViewInit {
         }
       });
     }
+  }
+
+  get oldestTimestamp() {
+    if (!this.messages.length) return undefined;
+    return this.messages[0].ts;
+  }
+
+  canLoadOlder() {
+    return this.selectedGroupId && this.selectedChannelId && this.hasMore && !this.loadingOlder && !!this.messages.length;
+  }
+
+  loadOlder() {
+    if (!this.canLoadOlder()) return;
+    const beforeTs = this.oldestTimestamp;
+    if (!beforeTs) return;
+    this.loadingOlder = true;
+    const prevScrollEl = this.scrollContainer?.nativeElement;
+    const prevHeight = prevScrollEl ? prevScrollEl.scrollHeight : 0;
+    const username = this.username();
+    this.api.getMessages(this.selectedGroupId, this.selectedChannelId, { user: username, limit: 50, beforeTs }).subscribe({
+      next: (res) => {
+        const incoming = (res.messages || []).filter(m => !this.messages.some(ex => ex.id === m.id));
+        // Prepend older messages
+        this.messages = [...incoming.map(m => ({ id: m.id, username: m.username, text: m.text, ts: m.ts })), ...this.messages];
+        // Use server's hasMore directly (accurate via limit+1 strategy); if no new messages, hasMore false
+        this.hasMore = !!res.hasMore;
+        // Preserve scroll position after prepending
+        queueMicrotask(() => {
+          if (prevScrollEl) {
+            const newHeight = prevScrollEl.scrollHeight;
+            prevScrollEl.scrollTop = newHeight - prevHeight; // anchor to first previously visible message
+          }
+        });
+      },
+      error: () => {
+        this.hasMore = false; // disable to avoid spam; could retry
+      },
+      complete: () => { this.loadingOlder = false; }
+    });
   }
 
   async onSend() {

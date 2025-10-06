@@ -75,6 +75,10 @@
 	margin: 0;
 	padding: 0;
 }
+.load-older { text-align: center; margin: 4px 0 12px; }
+.load-older-btn { background: #f1f1f1; border: 1px solid #ccc; padding: 4px 12px; border-radius: 16px; font-size: 12px; cursor: pointer; }
+.load-older-btn:hover:not([disabled]) { background: #e5e5e5; }
+.load-older-btn[disabled] { opacity: 0.6; cursor: default; }
 .message { padding: 6px 0; display: flex; gap: 8px; align-items: baseline; }
 .message .author { font-weight: 600; }
 .message .text { flex: 1; }

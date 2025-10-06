@@ -95,4 +95,13 @@ export class Api {
   updateUserProfile(userId: string, payload: { username?: string; email?: string; password?: string; requester: string }) {
     return this.http.put<{ user: any }>(`${this.base}/users/${userId}`, payload);
   }
+
+  // Paginated message history (older messages): pass beforeTs to page backwards
+  getMessages(groupId: string, channelId: string, opts: { user: string; limit?: number; beforeTs?: number }) {
+    const params = new URLSearchParams();
+    params.set('user', opts.user);
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.beforeTs) params.set('beforeTs', String(opts.beforeTs));
+    return this.http.get<{ messages: any[]; hasMore?: boolean }>(`${this.base}/messages/${groupId}/${channelId}?${params.toString()}`);
+  }
 }

@@ -47,6 +47,12 @@
       </div>
 
       <ul *ngIf="selectedGroupId && selectedChannelId" class="message-list">
+        <li *ngIf="canLoadOlder()" class="load-older">
+          <button class="load-older-btn" type="button" (click)="loadOlder()" [disabled]="loadingOlder">
+            <span *ngIf="!loadingOlder">Load older messages</span>
+            <span *ngIf="loadingOlder">Loading...</span>
+          </button>
+        </li>
         <li *ngFor="let m of messages" class="message" [class.system]="m.username === 'system'">
           <ng-container *ngIf="m.username !== 'system'; else systemMsg">
             <span class="author">{{ m.username }}</span>

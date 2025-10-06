@@ -9,12 +9,18 @@ async function saveMessage({ id, groupId, channelId, username, text, ts }) {
   return doc;
 }
 
-async function history(groupId, channelId, { limit = 50 } = {}) {
+// Retrieve messages newest-last (chronological ascending).
+// Options:
+//  - limit (default 50)
+//  - beforeTs: only messages with ts < beforeTs (for pagination backwards)
+async function history(groupId, channelId, { limit = 50, beforeTs } = {}) {
   const { messages } = await ensureCollection();
   const q = { groupId, channelId };
+  if (beforeTs) {
+    q.ts = { $lt: Number(beforeTs) };
+  }
   const cursor = messages.find(q).sort({ ts: -1 }).limit(limit);
   const list = await cursor.toArray();
-  // Return newest last (chronological ascending)
   return list.reverse();
 }
 
