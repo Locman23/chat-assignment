@@ -26,6 +26,7 @@ export class Chat implements OnInit, AfterViewInit {
   errorMsg = '';
   presenceUsers: string[] = [];
   typingUsers: string[] = [];
+  roster: Array<{ username: string; status: string }> = [];
   private typing = false;
   private typingTimer: any;
   @ViewChild('scrollContainer') private scrollContainer?: ElementRef<HTMLDivElement>;
@@ -51,6 +52,13 @@ export class Chat implements OnInit, AfterViewInit {
       // Exclude self when storing; easier for display logic
       const me = this.username().toLowerCase();
       this.typingUsers = users.filter(u => u.toLowerCase() !== me);
+    });
+    this.sockets.roster().subscribe(r => {
+      this.roster = r.slice().sort((a,b) => {
+        const order = (s: string) => s === 'active' ? 0 : s === 'online' ? 1 : 2;
+        const diff = order(a.status) - order(b.status);
+        return diff !== 0 ? diff : a.username.localeCompare(b.username);
+      });
     });
     this.loadGroups();
   }
@@ -155,6 +163,21 @@ export class Chat implements OnInit, AfterViewInit {
         // Always scroll on initial history load for a room
         this.deferScrollToBottom();
       }
+      // Request roster explicitly (in addition to push) as a safety net
+      this.sockets.requestRoster().then(ack => {
+        if (ack?.ok && Array.isArray(ack.roster)) {
+          // eslint-disable-next-line no-console
+          console.log('[chat] roster ack', ack.roster);
+          this.roster = ack.roster.slice().sort((a,b) => {
+            const order = (s: string) => s === 'active' ? 0 : s === 'online' ? 1 : 2;
+            const diff = order(a.status) - order(b.status);
+            return diff !== 0 ? diff : a.username.localeCompare(b.username);
+          });
+        } else {
+          // eslint-disable-next-line no-console
+          console.warn('[chat] roster ack failed', ack);
+        }
+      });
     }
   }
 

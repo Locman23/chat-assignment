@@ -1,7 +1,7 @@
 const { Server } = require('socket.io');
 const { getCollections, normalize } = require('./db/mongo');
 const { saveMessage, history } = require('./services/messageStore');
-const { addPresence, removePresence, listPresence } = require('./services/presence');
+const { addPresence, removePresence, listPresence, buildRoster } = require('./services/presence');
 const { setTyping, listTyping, clearTyping } = require('./services/typing');
 
 async function getUserByUsername(username) {
@@ -87,6 +87,8 @@ function initSockets(httpServer) {
         // Presence update
         addPresence(rid, username, socket.id);
         io.to(rid).emit('chat:presence', { users: listPresence(rid) });
+        // Roster broadcast (list all group members with status)
+        broadcastRoster(io, rid, g);
       } catch (e) {
         console.error('[io] join error', e);
         ack && ack({ ok: false, error: 'join failed' });
@@ -101,6 +103,9 @@ function initSockets(httpServer) {
         removePresence(prev, prevUser, socket.id);
         clearTyping(prev, prevUser);
         io.to(prev).emit('chat:presence', { users: listPresence(prev) });
+        // Roster update for remaining users in previous room
+        const g = await getGroupById(pgid);
+        broadcastRoster(io, prev, g);
         socket.leave(prev);
       }
       socket.data = {};
@@ -116,6 +121,8 @@ function initSockets(httpServer) {
           removePresence(prev, username, socket.id);
           clearTyping(prev, username);
           io.to(prev).emit('chat:presence', { users: listPresence(prev) });
+          const g = await getGroupById(groupId);
+          broadcastRoster(io, prev, g);
         }
       } catch (e) {
         console.error('[io] disconnect system message failed', e);
@@ -159,11 +166,33 @@ function initSockets(httpServer) {
       io.to(room).emit('chat:typing', { users: listTyping(room) });
       ack && ack({ ok: true });
     });
+
+    // Client may explicitly request roster refresh
+    socket.on('chat:roster:request', async (_payload, ack) => {
+      const { groupId, room } = socket.data || {};
+      if (!groupId || !room) return ack && ack({ ok: false });
+      const g = await getGroupById(groupId);
+      if (!g) return ack && ack({ ok: false });
+      const roster = buildRoster(g.members || [], room);
+      ack && ack({ ok: true, roster });
+    });
   });
 
   // (Global disconnect handler removed; per-socket disconnect is inside connection scope.)
 
   return io;
+}
+
+// Helper to broadcast roster to a specific room (using group data passed or fetched)
+async function broadcastRoster(io, room, group) {
+  try {
+    if (!group) return;
+    const roster = buildRoster(group.members || [], room);
+    console.log('[io] roster broadcast', { room, members: (group.members||[]).length, roster });
+    io.to(room).emit('chat:roster', { roster });
+  } catch (e) {
+    console.error('[io] roster broadcast failed', e);
+  }
 }
 
 module.exports = { initSockets };

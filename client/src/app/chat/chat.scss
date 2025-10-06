@@ -1,7 +1,8 @@
 /* Layout */
+
 .chat-layout {
 	display: grid;
-	grid-template-columns: 260px 1fr;
+	grid-template-columns: 260px 1fr 220px;
 	gap: 0;
 	height: calc(100vh - 120px);
 	border: 1px solid #ddd;
@@ -95,4 +96,28 @@
   font-size: 12px;
   color: #666;
   font-style: italic;
+}
+
+/* Roster (right column) */
+.roster {
+	border-left: 1px solid #e5e5e5;
+	background: #fafafa;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+.roster-header { padding: 12px 16px; border-bottom: 1px solid #e5e5e5; }
+.roster-list { list-style: none; margin: 0; padding: 8px 0 0 0; flex: 1; overflow-y: auto; }
+.roster-item { display: flex; align-items: center; gap: 8px; padding: 4px 16px; font-size: 14px; }
+.roster-item.active { font-weight: 600; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; background: #ccc; box-shadow: 0 0 0 1px #fff inset; }
+.status-dot[data-status='active'], .status-dot.legend.active { background: #28a745; }
+.status-dot[data-status='online'], .status-dot.legend.online { background: #ffbf00; }
+.status-dot[data-status='offline'], .status-dot.legend.offline { background: #dc3545; }
+.roster-legend { padding: 8px 16px; border-top: 1px solid #e5e5e5; font-size: 11px; color: #555; display: grid; gap: 4px; }
+.roster-legend .legend { margin-right: 6px; }
+
+@media (max-width: 1100px) {
+	.chat-layout { grid-template-columns: 220px 1fr; }
+	.roster { display: none; }
 }

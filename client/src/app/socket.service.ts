@@ -17,6 +17,7 @@ export class SocketService {
   private message$ = new Subject<ChatMessage>();
   private presence$ = new Subject<string[]>();
   private typing$ = new Subject<string[]>();
+  private roster$ = new Subject<Array<{ username: string; status: string }>>();
 
   connect(url = 'http://localhost:3000') {
     if (this.socket) return;
@@ -40,6 +41,11 @@ export class SocketService {
     this.socket.on('chat:typing', (payload: { users: string[] }) => {
       this.typing$.next((payload?.users || []).slice());
     });
+    this.socket.on('chat:roster', (payload: { roster: Array<{ username: string; status: string }> }) => {
+      // eslint-disable-next-line no-console
+      console.log('[socket] roster event', payload);
+      this.roster$.next((payload?.roster || []).slice());
+    });
   }
 
   disconnect() {
@@ -59,6 +65,16 @@ export class SocketService {
 
   typing(): Observable<string[]> {
     return this.typing$.asObservable();
+  }
+
+  roster(): Observable<Array<{ username: string; status: string }>> {
+    return this.roster$.asObservable();
+  }
+
+  requestRoster(): Promise<{ ok: boolean; roster?: Array<{ username: string; status: string }> }> {
+    return new Promise((resolve) => {
+      this.socket?.emit('chat:roster:request', {}, (ack: any) => resolve(ack));
+    });
   }
 
   join(username: string, groupId: string, channelId: string): Promise<{ ok: boolean; error?: string; history?: ChatMessage[] }> {

@@ -69,4 +69,22 @@
       <div class="chat-input muted" style="justify-content:center; font-size:13px;">Select a group & channel to start chatting.</div>
     </ng-template>
   </main>
+
+  <!-- Roster column -->
+  <aside class="roster" *ngIf="selectedGroupId">
+    <div class="roster-header">
+      <h3>Users</h3>
+    </div>
+    <ul class="roster-list">
+      <li *ngFor="let u of roster" class="roster-item" [class.active]="u.status==='active'" [class.online]="u.status==='online'" [class.offline]="u.status==='offline'">
+        <span class="status-dot" [attr.data-status]="u.status"></span>
+        <span class="name">{{ u.username }}</span>
+      </li>
+    </ul>
+    <div class="roster-legend">
+      <div><span class="status-dot legend active"></span> Active here</div>
+      <div><span class="status-dot legend online"></span> Online elsewhere</div>
+      <div><span class="status-dot legend offline"></span> Offline</div>
+    </div>
+  </aside>
 </section>
