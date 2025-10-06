@@ -5,6 +5,7 @@ const http = require('http');
 const { connectMongo } = require('./db/mongo');
 const { seedIfEmpty } = require('./db/seed');
 const { initSockets } = require('./sockets');
+const logger = require('./utils/logger');
 
 const app = express();
 app.use(cors());
@@ -14,11 +15,9 @@ app.use(express.json());
 app.get('/ping', (_req, res) => res.type('text').send('pong'));
 
 // Periodic debug to confirm process remains alive (can be removed later)
-setInterval(() => {
-	if (process.env.DEBUG_HEARTBEAT) {
-		console.log('[heartbeat]', Math.round(process.uptime()), 's');
-	}
-}, 15000);
+if (process.env.DEBUG_HEARTBEAT) {
+	setInterval(() => logger.debug('heartbeat', { uptimeSec: Math.round(process.uptime()) }), 15000);
+}
 
 // Mount modular routers (they will lazy-load Mongo collections)
 app.use('/api/auth', require('./routes/auth'));
@@ -59,23 +58,23 @@ async function start() {
 				function attempt(port, attemptNo) {
 					const srv = http.createServer(app);
 					initSockets(srv);
-					console.log(`[startup] attempting listen on ${port} (attempt ${attemptNo})`);
+					logger.info(`Attempting listen on ${port} (attempt ${attemptNo})`);
 					srv.once('error', (err) => {
 						if (err.code === 'EADDRINUSE' && attemptNo < maxAttempts) {
 							const nextPort = port + 1;
-								console.warn(`Port ${port} in use, trying ${nextPort} (attempt ${attemptNo + 1}/${maxAttempts})`);
+								logger.warn(`Port ${port} in use, trying ${nextPort} (attempt ${attemptNo + 1}/${maxAttempts})`);
 							attempt(nextPort, attemptNo + 1);
 						} else {
-							console.error('Server listen error', err);
+							logger.error('Server listen error', err);
 							process.exit(1);
 						}
 					});
-					srv.listen(port, () => console.log(`Server running at http://localhost:${port}`));
+					srv.listen(port, () => logger.info(`Server running at http://localhost:${port}`));
 				}
 
 				attempt(basePort, 1);
 	} catch (err) {
-		console.error('Startup failure', err);
+		logger.error('Startup failure', err);
 		process.exit(1);
 	}
 }

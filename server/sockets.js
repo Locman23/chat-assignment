@@ -3,6 +3,7 @@ const { getCollections, normalize } = require('./db/mongo');
 const { saveMessage, history } = require('./services/messageStore');
 const { addPresence, removePresence, listPresence, buildRoster } = require('./services/presence');
 const { setTyping, listTyping, clearTyping } = require('./services/typing');
+const logger = require('./utils/logger');
 
 async function getUserByUsername(username) {
   if (!username) return null;
@@ -37,7 +38,7 @@ function initSockets(httpServer) {
 
     async function emitSystem(ioRef, room, { groupId, channelId }, text) {
       if (!room) return;
-      console.log('[io][system] attempt', { room, groupId, channelId, text });
+  logger.debug('[system] attempt', { room, groupId, channelId, text });
       const msg = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         username: 'system',
@@ -49,22 +50,22 @@ function initSockets(httpServer) {
       try {
         await saveMessage(msg);
         ioRef.to(room).emit('chat:message', msg);
-        console.log('[io][system] sent');
+        logger.debug('[system] sent');
       } catch (e) {
-        console.error('[io] system message persist error', e);
+        logger.error('system message persist error', e);
       }
     }
 
   io.on('connection', (socket) => {
-  console.log('[io] client connected', socket.id);
+  logger.debug('client connected', { sid: socket.id });
     // Client should provide { username, groupId, channelId }
     socket.on('chat:join', async ({ username, groupId, channelId }, ack) => {
       try {
-  console.log('[io][join] attempt', { sid: socket.id, username, groupId, channelId });
+  logger.debug('[join] attempt', { sid: socket.id, username, groupId, channelId });
         const g = await getGroupById(groupId);
-  if (!g) { console.warn('[io][join] group not found'); return ack && ack({ ok: false, error: 'group not found' }); }
-  if (!(await canJoinGroup(username, g))) { console.warn('[io][join] membership denied'); return ack && ack({ ok: false, error: 'not a member of this group' }); }
-  if (!channelExists(g, channelId)) { console.warn('[io][join] channel not found'); return ack && ack({ ok: false, error: 'channel not found' }); }
+  if (!g) { logger.warn('[join] group not found'); return ack && ack({ ok: false, error: 'group not found' }); }
+  if (!(await canJoinGroup(username, g))) { logger.warn('[join] membership denied'); return ack && ack({ ok: false, error: 'not a member of this group' }); }
+  if (!channelExists(g, channelId)) { logger.warn('[join] channel not found'); return ack && ack({ ok: false, error: 'channel not found' }); }
 
         // Leave previous room if any
         const prev = socket.data?.room;
@@ -78,7 +79,7 @@ function initSockets(httpServer) {
         const rid = roomId(groupId, channelId);
         socket.data = { username, groupId, channelId, room: rid };
         socket.join(rid);
-        console.log('[io] join', { sid: socket.id, username, groupId, channelId, rid });
+  logger.debug('join success', { sid: socket.id, username, groupId, channelId, rid });
         // Load recent history (default 50) and include in ack
         const recent = await history(groupId, channelId, { limit: 50 });
         ack && ack({ ok: true, history: recent });
@@ -90,7 +91,7 @@ function initSockets(httpServer) {
         // Roster broadcast (list all group members with status)
         broadcastRoster(io, rid, g);
       } catch (e) {
-        console.error('[io] join error', e);
+        logger.error('join error', e);
         ack && ack({ ok: false, error: 'join failed' });
       }
     });
@@ -125,7 +126,7 @@ function initSockets(httpServer) {
           broadcastRoster(io, prev, g);
         }
       } catch (e) {
-        console.error('[io] disconnect system message failed', e);
+        logger.error('disconnect system message failed', e);
       }
     });
 
@@ -146,13 +147,13 @@ function initSockets(httpServer) {
       try {
         await saveMessage(msg);
         io.to(room).emit('chat:message', msg);
-        console.log('[io] msg', { room, username, text: msg.text });
+        logger.debug('message', { room, username, len: msg.text.length });
         ack && ack({ ok: true, message: msg });
         // After sending a message, mark the user as no longer typing (natural end of typing burst)
         setTyping(room, username, false);
         io.to(room).emit('chat:typing', { users: listTyping(room) });
       } catch (persistErr) {
-        console.error('[io] persist error', persistErr);
+        logger.error('persist error', persistErr);
         ack && ack({ ok: false, error: 'persist failed' });
       }
     });
@@ -188,10 +189,10 @@ async function broadcastRoster(io, room, group) {
   try {
     if (!group) return;
     const roster = buildRoster(group.members || [], room);
-    console.log('[io] roster broadcast', { room, members: (group.members||[]).length, roster });
+    logger.debug('roster broadcast', { room, members: (group.members||[]).length, roster });
     io.to(room).emit('chat:roster', { roster });
   } catch (e) {
-    console.error('[io] roster broadcast failed', e);
+    logger.error('roster broadcast failed', e);
   }
 }
 
