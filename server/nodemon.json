@@ -1,8 +1,6 @@
 {
   "ignore": [
-    "data.json",
     "*.tmp",
-    "**/*.tmp",
-    "data.json.tmp"
+    "**/*.tmp"
   ]
 }

@@ -15,6 +15,8 @@ export interface ChatMessage {
 export class SocketService {
   private socket?: Socket;
   private message$ = new Subject<ChatMessage>();
+  private presence$ = new Subject<string[]>();
+  private typing$ = new Subject<string[]>();
 
   connect(url = 'http://localhost:3000') {
     if (this.socket) return;
@@ -32,6 +34,12 @@ export class SocketService {
       console.error('[socket] error', err);
     });
     this.socket.on('chat:message', (m: ChatMessage) => this.message$.next(m));
+    this.socket.on('chat:presence', (payload: { users: string[] }) => {
+      this.presence$.next((payload?.users || []).slice());
+    });
+    this.socket.on('chat:typing', (payload: { users: string[] }) => {
+      this.typing$.next((payload?.users || []).slice());
+    });
   }
 
   disconnect() {
@@ -45,7 +53,15 @@ export class SocketService {
     return this.message$.asObservable();
   }
 
-  join(username: string, groupId: string, channelId: string): Promise<{ ok: boolean; error?: string }> {
+  presence(): Observable<string[]> {
+    return this.presence$.asObservable();
+  }
+
+  typing(): Observable<string[]> {
+    return this.typing$.asObservable();
+  }
+
+  join(username: string, groupId: string, channelId: string): Promise<{ ok: boolean; error?: string; history?: ChatMessage[] }> {
     return new Promise((resolve) => {
       this.socket?.emit('chat:join', { username, groupId, channelId }, (ack: any) => {
         // eslint-disable-next-line no-console
@@ -69,5 +85,10 @@ export class SocketService {
         resolve(ack);
       });
     });
+  }
+
+  setTyping(isTyping: boolean) {
+    // Fire and forget; no need to await ack for UI responsiveness
+    this.socket?.emit('chat:typing', { isTyping });
   }
 }

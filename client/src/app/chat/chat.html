@@ -35,25 +35,38 @@
       <ng-template #chooseGroup><h2>Select a group</h2></ng-template>
       <div class="muted small" *ngIf="statusMsg">{{ statusMsg }}</div>
       <div class="msg msg-error" *ngIf="errorMsg">{{ errorMsg }}</div>
+      <div class="presence" *ngIf="presenceUsers.length && selectedChannelId">
+        <span class="presence-label">Online:</span>
+        <span class="presence-user" *ngFor="let u of presenceUsers; let last = last">{{ u }}<span *ngIf="!last">, </span></span>
+      </div>
     </div>
 
-    <div class="chat-body">
+  <div class="chat-body" #scrollContainer (scroll)="onScroll()">
       <div *ngIf="!selectedGroupId || !selectedChannelId" class="msg msg-muted">
         Pick a channel to start chatting. Messages will appear here.
       </div>
 
       <ul *ngIf="selectedGroupId && selectedChannelId" class="message-list">
-        <li *ngFor="let m of messages" class="message">
-          <span class="author">{{ m.username }}</span>
-          <span class="text">{{ m.text }}</span>
-          <span class="time">{{ m.ts | date:'shortTime' }}</span>
+        <li *ngFor="let m of messages" class="message" [class.system]="m.username === 'system'">
+          <ng-container *ngIf="m.username !== 'system'; else systemMsg">
+            <span class="author">{{ m.username }}</span>
+            <span class="text">{{ m.text }}</span>
+            <span class="time">{{ m.ts | date:'shortTime' }}</span>
+          </ng-container>
+          <ng-template #systemMsg>
+            <span class="system-text">{{ m.text }} <span class="time">{{ m.ts | date:'shortTime' }}</span></span>
+          </ng-template>
         </li>
       </ul>
+      <div class="typing-indicator" *ngIf="typingDisplay() as td">{{ td }}</div>
     </div>
 
-    <form class="chat-input" (ngSubmit)="onSend()">
-      <input class="input" type="text" placeholder="Message" [(ngModel)]="messageText" name="message" [disabled]="!selectedGroupId || !selectedChannelId" />
-      <button class="btn" type="submit" [disabled]="!messageText || !selectedGroupId || !selectedChannelId">Send</button>
+    <form class="chat-input" (ngSubmit)="onSend()" *ngIf="selectedGroupId && selectedChannelId; else noChannelSelected">
+      <input class="input" type="text" placeholder="Message" [(ngModel)]="messageText" name="message" [disabled]="!selectedGroupId || !selectedChannelId" (input)="onInputChange()" />
+      <button class="btn" type="submit" [disabled]="!messageText">Send</button>
     </form>
+    <ng-template #noChannelSelected>
+      <div class="chat-input muted" style="justify-content:center; font-size:13px;">Select a group & channel to start chatting.</div>
+    </ng-template>
   </main>
 </section>
