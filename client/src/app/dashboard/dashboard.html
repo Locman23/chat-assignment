@@ -1,21 +1,21 @@
-<section class="dashboard-header">
+<section class="dashboard-header" data-cy="dashboard-header">
   <h2>Dashboard</h2>
   <p *ngIf="isSuper()" class="muted">You are a Super Admin.</p>
 </section>
 
 <!-- Users (Super Admin only) -->
-  <section *ngIf="isSuper()" class="panel panel-wide">
+  <section *ngIf="isSuper()" class="panel panel-wide" data-cy="users-panel">
     <h3>Users</h3>
-    <form (ngSubmit)="addUser()" #userForm="ngForm" class="form-inline">
-      <input id="username" class="input" name="username" [(ngModel)]="newUser.username" required placeholder="username" />
-      <input id="email" class="input" name="email" [(ngModel)]="newUser.email" required placeholder="email" />
-      <input id="password" class="input" name="password" [(ngModel)]="newUser.password" type="password" required placeholder="password" />
-      <button type="submit" class="btn" [disabled]="userForm.invalid">Add User</button>
+    <form (ngSubmit)="addUser()" #userForm="ngForm" class="form-inline" data-cy="add-user-form">
+      <input id="username" class="input" name="username" [(ngModel)]="newUser.username" required placeholder="username" data-cy="add-user-username" />
+      <input id="email" class="input" name="email" [(ngModel)]="newUser.email" required placeholder="email" data-cy="add-user-email" />
+      <input id="password" class="input" name="password" [(ngModel)]="newUser.password" type="password" required placeholder="password" data-cy="add-user-password" />
+      <button type="submit" class="btn" [disabled]="userForm.invalid" data-cy="add-user-submit">Add User</button>
     </form>
     <div *ngIf="addUserError" class="msg msg-error">{{ addUserError }}</div>
     <div *ngIf="addUserSuccess" class="msg msg-success">User added!</div>
 
-    <input class="input fullwidth" type="text" [(ngModel)]="userSearch" placeholder="Search users..." />
+  <input class="input fullwidth" type="text" [(ngModel)]="userSearch" placeholder="Search users..." data-cy="user-search" />
 
     <table class="table">
       <thead>
@@ -27,7 +27,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let user of (users | userFilter:userSearch)" [hidden]="user.username === 'super'">
+  <tr *ngFor="let user of (users | userFilter:userSearch)" [hidden]="user.username === 'super'" [attr.data-cy]="'user-row-' + user.username">
           <td>{{ user.username }}</td>
           <td>{{ user.email }}</td>
           <td>
@@ -49,16 +49,16 @@
   </section>
 
   <!-- Groups (visible to authenticated users) -->
-  <section class="panel panel-wide">
+  <section class="panel panel-wide" data-cy="groups-panel">
     <h3>Groups</h3>
-  <form *ngIf="canCreateGroup()" (ngSubmit)="addGroup()" #groupForm="ngForm" class="form-inline">
-      <input id="groupName" class="input" name="name" [(ngModel)]="newGroup.name" required placeholder="Group name" />
-      <button class="btn" type="submit" [disabled]="groupForm.invalid">Add Group</button>
+  <form *ngIf="canCreateGroup()" (ngSubmit)="addGroup()" #groupForm="ngForm" class="form-inline" data-cy="add-group-form">
+      <input id="groupName" class="input" name="name" [(ngModel)]="newGroup.name" required placeholder="Group name" data-cy="add-group-name" />
+      <button class="btn" type="submit" [disabled]="groupForm.invalid" data-cy="add-group-submit">Add Group</button>
     </form>
     <div *ngIf="addGroupError" class="msg msg-error">{{ addGroupError }}</div>
     <div *ngIf="addGroupSuccess" class="msg msg-success">Group added!</div>
 
-    <input class="input fullwidth" type="text" [(ngModel)]="groupSearch" placeholder="Search groups..." />
+  <input class="input fullwidth" type="text" [(ngModel)]="groupSearch" placeholder="Search groups..." data-cy="group-search" />
 
     <table class="table">
       <thead>
@@ -71,7 +71,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let group of (groups | groupFilter:groupSearch)">
+  <tr *ngFor="let group of (groups | groupFilter:groupSearch)" [attr.data-cy]="'group-row-' + group.id">
           <td>{{ group.name }}</td>
           <td>{{ group.ownerUsername }}</td>
           <td>

@@ -1,19 +1,19 @@
-<section class="chat-layout">
+<section class="chat-layout" data-cy="chat-page">
   <!-- Sidebar: groups and channels -->
-  <aside class="sidebar">
+  <aside class="sidebar" data-cy="group-sidebar">
     <div class="sidebar-header">
       <h3>Groups</h3>
     </div>
 
-    <div class="group-list" *ngIf="visibleGroups().length; else noGroups">
+    <div class="group-list" *ngIf="visibleGroups().length; else noGroups" data-cy="group-list">
       <div class="group-item" *ngFor="let g of visibleGroups()">
-        <button class="group-btn" [class.active]="g.id === selectedGroupId" (click)="selectGroup(g.id)">
+        <button class="group-btn" [class.active]="g.id === selectedGroupId" (click)="selectGroup(g.id)" [attr.data-cy]="'group-item-' + g.id">
           <span class="group-name">{{ g.name }}</span>
         </button>
         <!-- Channels only visible if member (super sees all groups but we still require membership to view channels) -->
-        <ul class="channel-list" *ngIf="isMember(g)">
+        <ul class="channel-list" *ngIf="isMember(g)" [attr.data-cy]="'channel-list-' + g.id">
           <li *ngFor="let c of (g.channels || [])">
-            <button class="channel-btn" [class.active]="c.id === selectedChannelId && g.id === selectedGroupId" (click)="selectChannelOfGroup(g.id, c.id)">
+            <button class="channel-btn" [class.active]="c.id === selectedChannelId && g.id === selectedGroupId" (click)="selectChannelOfGroup(g.id, c.id)" [attr.data-cy]="'channel-item-' + c.id">
               # {{ c.name }}
             </button>
           </li>
@@ -26,7 +26,7 @@
   </aside>
 
   <!-- Main chat area -->
-  <main class="chat">
+  <main class="chat" data-cy="chat-main">
     <div class="chat-header">
       <h2 *ngIf="selectedGroup as sg; else chooseGroup">
         {{ sg.name }}
@@ -41,19 +41,19 @@
       </div>
     </div>
 
-  <div class="chat-body" #scrollContainer (scroll)="onScroll()">
+  <div class="chat-body" #scrollContainer (scroll)="onScroll()" data-cy="chat-scroll">
       <div *ngIf="!selectedGroupId || !selectedChannelId" class="msg msg-muted">
         Pick a channel to start chatting. Messages will appear here.
       </div>
 
-      <ul *ngIf="selectedGroupId && selectedChannelId" class="message-list">
+      <ul *ngIf="selectedGroupId && selectedChannelId" class="message-list" data-cy="message-list">
         <li *ngIf="canLoadOlder()" class="load-older">
-          <button class="load-older-btn" type="button" (click)="loadOlder()" [disabled]="loadingOlder">
+          <button class="load-older-btn" type="button" (click)="loadOlder()" [disabled]="loadingOlder" data-cy="load-older-btn">
             <span *ngIf="!loadingOlder">Load older messages</span>
             <span *ngIf="loadingOlder">Loading...</span>
           </button>
         </li>
-        <li *ngFor="let m of messages" class="message" [class.system]="m.username === 'system'">
+        <li *ngFor="let m of messages" class="message" [class.system]="m.username === 'system'" [attr.data-cy]="'message-' + m.id">
           <ng-container *ngIf="m.username !== 'system'; else systemMsg">
             <span class="avatar-wrap">
               <ng-container *ngIf="m.avatarUrl; else messageFallback">
@@ -84,13 +84,13 @@
       <div class="typing-indicator" *ngIf="typingDisplay() as td">{{ td }}</div>
     </div>
 
-    <form class="chat-input" (ngSubmit)="onSend()" *ngIf="selectedGroupId && selectedChannelId; else noChannelSelected">
-      <input class="input" type="text" placeholder="Message" [(ngModel)]="messageText" name="message" [disabled]="!selectedGroupId || !selectedChannelId" (input)="onInputChange()" />
+    <form class="chat-input" (ngSubmit)="onSend()" *ngIf="selectedGroupId && selectedChannelId; else noChannelSelected" data-cy="chat-form">
+      <input class="input" type="text" placeholder="Message" [(ngModel)]="messageText" name="message" [disabled]="!selectedGroupId || !selectedChannelId" (input)="onInputChange()" data-cy="chat-input" />
       <label class="btn secondary file-btn">
         📷
-        <input type="file" accept="image/*" (change)="onSelectImage($event)" hidden />
+        <input type="file" accept="image/*" (change)="onSelectImage($event)" hidden data-cy="chat-image-input" />
       </label>
-      <button class="btn" type="submit" [disabled]="!messageText">Send</button>
+  <button class="btn" type="submit" [disabled]="!(messageText && messageText.trim())" data-cy="chat-send">Send</button>
     </form>
     <ng-template #noChannelSelected>
       <div class="chat-input muted" style="justify-content:center; font-size:13px;">Select a group & channel to start chatting.</div>
@@ -98,12 +98,13 @@
   </main>
 
   <!-- Roster column -->
-  <aside class="roster" *ngIf="selectedGroupId">
+  <aside class="roster" *ngIf="selectedGroupId" data-cy="roster">
     <div class="roster-header">
       <h3>Users</h3>
     </div>
-    <ul class="roster-list">
+    <ul class="roster-list" data-cy="roster-list">
       <li *ngFor="let u of roster" class="roster-item" [class.active]="u.status==='active'" [class.online]="u.status==='online'" [class.offline]="u.status==='offline'">
+        <span class="sr-only" [attr.data-cy]="'roster-item-' + u.username"></span>
         <span class="status-dot" [attr.data-status]="u.status"></span>
         <span class="roster-avatar">
           <ng-container *ngIf="u.avatarUrl; else rosterFallback">
