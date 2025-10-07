@@ -14,6 +14,9 @@ async function getGroupById(gid) { const { groups } = getCollections(); return g
 const { publicBase } = require('./utils/base');
 const { DEFAULT_HISTORY_LIMIT } = require('./constants');
 
+// Cache the public base URL once for absolute URL construction.
+const BASE_URL = publicBase();
+
 function roomId(groupId, channelId) {
   return `${groupId}:${channelId}`;
 }
@@ -38,31 +41,31 @@ function initSockets(httpServer) {
     cors: { origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] }
   });
 
-    async function emitSystem(ioRef, room, { groupId, channelId }, text) {
-      if (!room) return;
-  logger.debug('[system] attempt', { room, groupId, channelId, text });
-      const msg = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        username: 'system',
-        groupId,
-        channelId,
-        text,
-        ts: Date.now()
-      };
-      try {
-        await saveMessage(msg);
-        ioRef.to(room).emit('chat:message', msg);
-        logger.debug('[system] sent');
-      } catch (e) {
-        logger.error('system message persist error', e);
-      }
+  async function emitSystemMessage(ioRef, room, { groupId, channelId }, text) {
+    if (!room) return;
+    logger.debug('[system] attempt', { room, groupId, channelId, text });
+    const msg = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      username: 'system',
+      groupId,
+      channelId,
+      text,
+      ts: Date.now()
+    };
+    try {
+      await saveMessage(msg);
+      ioRef.to(room).emit('chat:message', msg);
+      logger.debug('[system] sent');
+    } catch (e) {
+      logger.error('system message persist error', e);
     }
+  }
 
   io.on('connection', (socket) => {
-  logger.debug('client connected', { sid: socket.id });
+    logger.debug('client connected', { sid: socket.id });
     socket.on('chat:join', async ({ username, groupId, channelId }, ack) => {
       try {
-  logger.debug('[join] attempt', { sid: socket.id, username, groupId, channelId });
+    logger.debug('[join] attempt', { sid: socket.id, username, groupId, channelId });
         const g = await getGroupById(groupId);
   if (!g) { logger.warn('[join] group not found'); return ack && ack({ ok: false, error: 'group not found' }); }
   if (!(await canJoinGroup(username, g))) { logger.warn('[join] membership denied'); return ack && ack({ ok: false, error: 'not a member of this group' }); }
@@ -73,17 +76,16 @@ function initSockets(httpServer) {
         if (prev) {
           // Emit leave before leaving so room members receive it
           const { groupId: pgid, channelId: pcid, username: prevUser } = socket.data || {};
-            await emitSystem(io, prev, { groupId: pgid, channelId: pcid }, `${prevUser || 'A user'} left the channel`);
+          await emitSystemMessage(io, prev, { groupId: pgid, channelId: pcid }, `${prevUser || 'A user'} left the channel`);
           socket.leave(prev);
         }
 
         const rid = roomId(groupId, channelId);
         socket.data = { username, groupId, channelId, room: rid };
         socket.join(rid);
-  logger.debug('join success', { sid: socket.id, username, groupId, channelId, rid });
-  // Load recent history using configured default limit
-  const { DEFAULT_HISTORY_LIMIT } = require('./constants');
-  const recent = await history(groupId, channelId, { limit: DEFAULT_HISTORY_LIMIT });
+    logger.debug('join success', { sid: socket.id, username, groupId, channelId, rid });
+    // Load recent history using configured default limit
+    const recent = await history(groupId, channelId, { limit: DEFAULT_HISTORY_LIMIT });
   // Build roster (with avatars) for immediate display
         let enrichedRoster = [];
         try {
@@ -93,7 +95,7 @@ function initSockets(httpServer) {
         }
         ack && ack({ ok: true, history: recent, roster: enrichedRoster });
   // System join after ack so client can render history first
-        emitSystem(io, rid, { groupId, channelId }, `${username} joined the channel`).catch(()=>{});
+  emitSystemMessage(io, rid, { groupId, channelId }, `${username} joined the channel`).catch(()=>{});
   // Presence update
         addPresence(rid, username, socket.id);
         io.to(rid).emit('chat:presence', { users: listPresence(rid) });
@@ -109,7 +111,7 @@ function initSockets(httpServer) {
       const prev = socket.data?.room;
       if (prev) {
         const { groupId: pgid, channelId: pcid, username: prevUser } = socket.data || {};
-        await emitSystem(io, prev, { groupId: pgid, channelId: pcid }, `${prevUser || 'A user'} left the channel`);
+  await emitSystemMessage(io, prev, { groupId: pgid, channelId: pcid }, `${prevUser || 'A user'} left the channel`);
         removePresence(prev, prevUser, socket.id);
         clearTyping(prev, prevUser);
         io.to(prev).emit('chat:presence', { users: listPresence(prev) });
@@ -127,7 +129,7 @@ function initSockets(httpServer) {
         const prev = socket.data?.room;
         if (prev) {
           const { groupId, channelId, username } = socket.data || {};
-          await emitSystem(io, prev, { groupId, channelId }, `${username || 'A user'} left the channel`);
+          await emitSystemMessage(io, prev, { groupId, channelId }, `${username || 'A user'} left the channel`);
           removePresence(prev, username, socket.id);
           clearTyping(prev, username);
           io.to(prev).emit('chat:presence', { users: listPresence(prev) });
@@ -159,11 +161,7 @@ function initSockets(httpServer) {
         const { getCollections } = require('./db/mongo');
         const { users } = getCollections();
         const uDoc = await users.findOne({ username: { $regex: `^${normalize(username)}$`, $options: 'i' } }, { projection: { avatarUrl: 1 } });
-        if (uDoc?.avatarUrl) {
-          const { publicBase } = require('./utils/base');
-          const base = publicBase();
-          msg.avatarUrl = `${base}${uDoc.avatarUrl}`;
-        }
+        if (uDoc?.avatarUrl) msg.avatarUrl = `${BASE_URL}${uDoc.avatarUrl}`;
       } catch (e) {
         logger.warn('attach avatar to message failed', e);
       }
@@ -179,18 +177,16 @@ function initSockets(httpServer) {
       if (!msg.attachments.length) delete msg.attachments; // keep schema clean when none
       try {
         // Build persistence clone with relative URLs only
-  const { publicBase } = require('./utils/base');
-  const base = publicBase();
         const persistMsg = { ...msg };
         // Normalize avatarUrl to relative
-        if (persistMsg.avatarUrl && persistMsg.avatarUrl.startsWith(base)) {
-          persistMsg.avatarUrl = persistMsg.avatarUrl.slice(base.length);
+        if (persistMsg.avatarUrl && persistMsg.avatarUrl.startsWith(BASE_URL)) {
+          persistMsg.avatarUrl = persistMsg.avatarUrl.slice(BASE_URL.length);
         }
         // Normalize attachment URLs to relative if they were returned absolute
         if (Array.isArray(persistMsg.attachments)) {
           persistMsg.attachments = persistMsg.attachments.map(a => {
-            if (a.url && a.url.startsWith(base)) {
-              return { ...a, url: a.url.slice(base.length) };
+            if (a.url && a.url.startsWith(BASE_URL)) {
+              return { ...a, url: a.url.slice(BASE_URL.length) };
             }
             return a;
           });
@@ -224,22 +220,13 @@ function initSockets(httpServer) {
       if (!groupId || !room) return ack && ack({ ok: false });
       const g = await getGroupById(groupId);
       if (!g) return ack && ack({ ok: false });
-      let roster = buildRoster(g.members || [], room);
       try {
-        const { getCollections } = require('./db/mongo');
-        const { users } = getCollections();
-        const names = (g.members || []).map(u => u).filter(Boolean);
-        if (names.length) {
-          const userDocs = await users.find({ username: { $in: names } }).project({ username: 1, avatarUrl: 1, _id: 0 }).toArray();
-          const map = new Map(userDocs.map(u => [String(u.username).toLowerCase(), u.avatarUrl]));
-          roster = roster.map(r => ({ ...r, avatarUrl: map.get(r.username.toLowerCase()) }));
-        }
+        const roster = await buildRosterWithAvatars(g, room);
+        ack && ack({ ok: true, roster });
       } catch (e) {
-        logger.warn('roster request avatar enrichment failed', e);
+        logger.error('roster request failed', e);
+        ack && ack({ ok: false, error: 'roster build failed' });
       }
-      const base = process.env.PUBLIC_BASE || 'http://localhost:3000';
-      const withAbs = roster.map(r => ({ ...r, avatarUrl: r.avatarUrl ? `${base}${r.avatarUrl}` : undefined }));
-      ack && ack({ ok: true, roster: withAbs });
     });
   });
 
@@ -248,36 +235,19 @@ function initSockets(httpServer) {
   return io;
 }
 
-// Helper to broadcast roster to a specific room (using group data passed or fetched)
+// Broadcast roster using unified enrichment helper
 async function broadcastRoster(io, room, group) {
+  if (!group) return;
   try {
-    if (!group) return;
-    const rosterBase = buildRoster(group.members || [], room);
-    // Enrich with avatarUrl (relative) from users collection
-    let enriched = rosterBase;
-    try {
-      const { getCollections } = require('./db/mongo');
-      const { users } = getCollections();
-      const names = (group.members || []).map(u => u).filter(Boolean);
-      if (names.length) {
-        const userDocs = await users.find({ username: { $in: names } }).project({ username: 1, avatarUrl: 1, _id: 0 }).toArray();
-        const map = new Map(userDocs.map(u => [String(u.username).toLowerCase(), u.avatarUrl]));
-        enriched = rosterBase.map(r => ({ ...r, avatarUrl: map.get(r.username.toLowerCase()) }));
-      }
-    } catch (e) {
-      logger.warn('roster avatar enrichment failed', e);
-    }
-  const { publicBase } = require('./utils/base');
-  const base = publicBase();
-  const withAbs = enriched.map(r => ({ ...r, avatarUrl: r.avatarUrl ? `${base}${r.avatarUrl}` : undefined }));
-  logger.debug('roster broadcast', { room, members: (group.members||[]).length });
-  io.to(room).emit('chat:roster', { roster: withAbs });
+    const roster = await buildRosterWithAvatars(group, room);
+    logger.debug('roster broadcast', { room, members: (group.members || []).length });
+    io.to(room).emit('chat:roster', { roster });
   } catch (e) {
     logger.error('roster broadcast failed', e);
   }
 }
 
-// Build roster entries with absolute avatar URLs
+// Build roster entries with absolute avatar URLs (unified enrichment used for join, broadcast & explicit requests)
 async function buildRosterWithAvatars(group, room) {
   if (!group) return [];
   const baseRoster = buildRoster(group.members || [], room);
@@ -288,11 +258,9 @@ async function buildRosterWithAvatars(group, room) {
     if (names.length) {
       const userDocs = await users.find({ username: { $in: names } }).project({ username: 1, avatarUrl: 1, _id: 0 }).toArray();
       const map = new Map(userDocs.map(u => [String(u.username).toLowerCase(), u.avatarUrl]));
-  const { publicBase } = require('./utils/base');
-  const base = publicBase();
       return baseRoster.map(r => {
         const rel = map.get(r.username.toLowerCase());
-        return { ...r, avatarUrl: rel ? `${base}${rel}` : undefined };
+        return { ...r, avatarUrl: rel ? `${BASE_URL}${rel}` : undefined };
       });
     }
   } catch (e) {
