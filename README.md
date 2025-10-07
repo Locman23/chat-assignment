@@ -322,6 +322,3 @@ Global (module) mutable references:
 - [ ] Global error middleware & validation layer
 
 ---
-
-If you need clarifications or want to extend (e.g., DM support, search, unread counts), see the Future Hardening table and open an issue / branch accordingly.
-
