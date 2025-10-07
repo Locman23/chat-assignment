@@ -15,7 +15,8 @@ const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadRoot),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const name = `${Date.now()}-${Math.random().toString(36).slice(2,8)}${ext}`;
+  const { shortId } = require('../utils/ids');
+  const name = `${shortId()}${ext}`;
     cb(null, name);
   }
 });

@@ -2,8 +2,12 @@
 // roomKey => username(lower) => { username, sockets: Set<socketId> }
 const roomUsers = new Map();
 
+/**
+ * Add (or augment) presence for a username in a given room.
+ * Multi-tab/window is supported; each socket increments the socket set.
+ */
 function addPresence(room, username, socketId) {
-  if (!room || !username) return;
+  if (!room || !username || !socketId) return;
   let userMap = roomUsers.get(room);
   if (!userMap) { userMap = new Map(); roomUsers.set(room, userMap); }
   const key = username.toLowerCase();
@@ -12,6 +16,9 @@ function addPresence(room, username, socketId) {
   userMap.set(key, entry);
 }
 
+/**
+ * Remove presence for a username/socket pair. If last socket removed, user leaves room.
+ */
 function removePresence(room, username, socketId) {
   if (!room || !username) return;
   const userMap = roomUsers.get(room);
@@ -28,14 +35,19 @@ function removePresence(room, username, socketId) {
   if (userMap.size === 0) roomUsers.delete(room);
 }
 
+/**
+ * List usernames currently present in a room (sorted).
+ */
 function listPresence(room) {
   const userMap = roomUsers.get(room);
   if (!userMap) return [];
   return Array.from(userMap.values()).map(v => v.username).sort((a,b)=>a.localeCompare(b));
 }
 
-// Determine status of a username relative to a specific room.
-// Returns 'active' if in this room, 'online' if in some other room, else 'offline'.
+/**
+ * Determine status of a username relative to a specific room.
+ * Returns 'active' if in this room, 'online' if in some other room, else 'offline'.
+ */
 function userStatus(username, currentRoom) {
   if (!username) return 'offline';
   const target = username.toLowerCase();
@@ -49,8 +61,22 @@ function userStatus(username, currentRoom) {
   return foundElsewhere ? 'online' : 'offline';
 }
 
+/**
+ * Build roster objects from usernames, annotating status.
+ */
 function buildRoster(usernames, currentRoom) {
   return (usernames || []).map(u => ({ username: u, status: userStatus(u, currentRoom) }));
 }
 
-module.exports = { addPresence, removePresence, listPresence, userStatus, buildRoster };
+/**
+ * Introspection (mainly for tests): get raw internal map snapshot (shallow clone).
+ */
+function _debugSnapshot() {
+  const out = {};
+  for (const [room, userMap] of roomUsers.entries()) {
+    out[room] = Array.from(userMap.values()).map(v => ({ username: v.username, sockets: v.sockets.size }));
+  }
+  return out;
+}
+
+module.exports = { addPresence, removePresence, listPresence, userStatus, buildRoster, _debugSnapshot };
