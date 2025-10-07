@@ -11,6 +11,8 @@ async function getUserByUsername(username) {
   return users.findOne({ username: { $regex: `^${normalize(username)}$`, $options: 'i' } });
 }
 async function getGroupById(gid) { const { groups } = getCollections(); return groups.findOne({ id: gid }); }
+const { publicBase } = require('./utils/base');
+const { DEFAULT_HISTORY_LIMIT } = require('./constants');
 
 function roomId(groupId, channelId) {
   return `${groupId}:${channelId}`;
@@ -58,7 +60,6 @@ function initSockets(httpServer) {
 
   io.on('connection', (socket) => {
   logger.debug('client connected', { sid: socket.id });
-    // Client should provide { username, groupId, channelId }
     socket.on('chat:join', async ({ username, groupId, channelId }, ack) => {
       try {
   logger.debug('[join] attempt', { sid: socket.id, username, groupId, channelId });
@@ -70,7 +71,7 @@ function initSockets(httpServer) {
         // Leave previous room if any
         const prev = socket.data?.room;
         if (prev) {
-          // send system leave before actually leaving so others in that room receive it
+          // Emit leave before leaving so room members receive it
           const { groupId: pgid, channelId: pcid, username: prevUser } = socket.data || {};
             await emitSystem(io, prev, { groupId: pgid, channelId: pcid }, `${prevUser || 'A user'} left the channel`);
           socket.leave(prev);
@@ -83,7 +84,7 @@ function initSockets(httpServer) {
   // Load recent history using configured default limit
   const { DEFAULT_HISTORY_LIMIT } = require('./constants');
   const recent = await history(groupId, channelId, { limit: DEFAULT_HISTORY_LIMIT });
-        // Build enriched roster with avatars for immediate display
+  // Build roster (with avatars) for immediate display
         let enrichedRoster = [];
         try {
           enrichedRoster = await buildRosterWithAvatars(g, rid);
@@ -91,12 +92,12 @@ function initSockets(httpServer) {
           logger.warn('join roster enrichment failed', e);
         }
         ack && ack({ ok: true, history: recent, roster: enrichedRoster });
-        // Broadcast system join (async, after ack so client can render history first)
+  // System join after ack so client can render history first
         emitSystem(io, rid, { groupId, channelId }, `${username} joined the channel`).catch(()=>{});
-        // Presence update
+  // Presence update
         addPresence(rid, username, socket.id);
         io.to(rid).emit('chat:presence', { users: listPresence(rid) });
-        // Roster broadcast (list all group members with status)
+  // Push current roster
         broadcastRoster(io, rid, g);
       } catch (e) {
         logger.error('join error', e);
@@ -112,7 +113,7 @@ function initSockets(httpServer) {
         removePresence(prev, prevUser, socket.id);
         clearTyping(prev, prevUser);
         io.to(prev).emit('chat:presence', { users: listPresence(prev) });
-        // Roster update for remaining users in previous room
+  // Update roster for previous room
         const g = await getGroupById(pgid);
         broadcastRoster(io, prev, g);
         socket.leave(prev);
@@ -212,7 +213,7 @@ function initSockets(httpServer) {
       const { username, room } = socket.data || {};
       if (!room || !username) return ack && ack({ ok: false });
       setTyping(room, username, !!isTyping);
-      // Broadcast updated typing users list (includes sender; clients can hide themselves)
+  // Broadcast updated typing users
       io.to(room).emit('chat:typing', { users: listTyping(room) });
       ack && ack({ ok: true });
     });

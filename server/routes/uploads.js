@@ -6,11 +6,11 @@ const { getCollections, normalize } = require('../db/mongo');
 const { canAccessGroup } = require('../utils/access');
 const asyncHandler = require('../utils/asyncHandler');
 
-// Ensure uploads dir exists
+// Ensure uploads directory exists.
 const uploadRoot = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadRoot)) fs.mkdirSync(uploadRoot, { recursive: true });
 
-// Storage config: keep original ext, random filename
+// Storage: preserve extension, random filename.
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadRoot),
   filename: (_req, file, cb) => {
@@ -27,11 +27,11 @@ function fileFilter(_req, file, cb){
 }
 
 const { UPLOAD_MAX_FILE_SIZE_BYTES } = require('../constants');
-const upload = multer({ storage, fileFilter, limits: { fileSize: UPLOAD_MAX_FILE_SIZE_BYTES } }); // 2MB limit
+const upload = multer({ storage, fileFilter, limits: { fileSize: UPLOAD_MAX_FILE_SIZE_BYTES } });
 
 const router = express.Router();
 
-// POST /api/uploads/avatar  (multipart field: avatar, body: username=requester)
+// POST /api/uploads/avatar (multipart field: avatar; form field: requester=username)
 router.post('/avatar', upload.single('avatar'), asyncHandler(async (req, res) => {
   const requester = req.body?.requester;
   if (!requester) return res.status(400).json({ error: 'requester required' });
@@ -48,8 +48,7 @@ router.post('/avatar', upload.single('avatar'), asyncHandler(async (req, res) =>
   res.json({ ok: true, user: updated, avatarUrl: absolute });
 }));
 
-// POST /api/uploads/message-image  (multipart field: image, body: { username, groupId, channelId })
-// Only validates group membership; actual message send still via socket referencing returned url.
+// POST /api/uploads/message-image (multipart field: image; body: username, groupId, channelId). Returns absolute URL.
 router.post('/message-image', upload.single('image'), asyncHandler(async (req, res) => {
   const { username, groupId, channelId } = req.body || {};
   if (!username || !groupId || !channelId) return res.status(400).json({ error: 'username, groupId, channelId required' });

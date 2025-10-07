@@ -21,7 +21,7 @@ export class Chat implements OnInit, AfterViewInit {
   selectedGroupId = '';
   selectedChannelId = '';
 
-  // Placeholder messages until Socket.IO + API history is added
+  // Chat messages currently loaded in view
   messages: Array<{ id: string; username: string; text: string; ts: number; attachments?: Array<{ type: string; url: string }>; avatarUrl?: string }> = [];
   messageText = '';
   statusMsg = '';
@@ -41,14 +41,14 @@ export class Chat implements OnInit, AfterViewInit {
   constructor(private api: Api, private auth: Auth, private sockets: SocketService) {}
 
   ngOnInit(): void {
-    // connect socket once
+  // One-time socket connection
     this.sockets.connect();
     this.sockets.messages().subscribe((m: ChatMessage) => {
       if (m.groupId === this.selectedGroupId && m.channelId === this.selectedChannelId) {
-        const shouldScroll = this.atBottom; // capture before DOM changes
+  const shouldScroll = this.atBottom;
         const built = this.buildMessage(m);
         this.messages = [...this.messages, built];
-        // If this message has an avatar and roster doesn't yet, update roster immediately
+  // Backfill roster avatar if newly discovered via message
         if (built.avatarUrl && built.username !== 'system') {
           const key = built.username.toLowerCase();
             const existing = this.rosterMap.get(key);
@@ -74,7 +74,7 @@ export class Chat implements OnInit, AfterViewInit {
       this.typingUsers = users.filter(u => u.toLowerCase() !== me);
     });
     this.sockets.roster().subscribe((r: any[]) => {
-      // Preserve existing known avatars (messages or previous roster)
+  // Merge roster, preserving any previously learned avatars
       const previous = new Map(this.rosterMap);
       for (const m of this.messages) if (m.avatarUrl) this.rosterMap.set(m.username.toLowerCase(), m.avatarUrl);
       const transformed = r.map(u => {
@@ -104,7 +104,7 @@ export class Chat implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    // In case history arrived before view init
+  // Scroll to bottom if history arrived before view init
     this.deferScrollToBottom();
   }
 
@@ -160,7 +160,7 @@ export class Chat implements OnInit, AfterViewInit {
     this.selectedGroupId = groupId;
     const channels = this.channelsFor(groupId);
     this.selectedChannelId = channels.length ? channels[0].id : '';
-    // Reset placeholder messages when switching
+  // Clear messages when switching groups
     this.messages = [];
     const username = this.username();
     if (username && this.selectedGroupId && this.selectedChannelId) {
@@ -170,7 +170,7 @@ export class Chat implements OnInit, AfterViewInit {
 
   selectChannel(channelId: string) {
     this.selectedChannelId = channelId;
-    // Reset placeholder messages when switching
+  // Clear messages when switching channels
     this.messages = [];
     const username = this.username();
     if (username && this.selectedGroupId && this.selectedChannelId) {
@@ -179,7 +179,7 @@ export class Chat implements OnInit, AfterViewInit {
   }
 
   selectChannelOfGroup(groupId: string, channelId: string) {
-    // Helper for sidebar click: ensure group selection is synced
+  // Sidebar click: ensure group selection is in sync
     if (this.selectedGroupId !== groupId) {
       this.selectedGroupId = groupId;
     }
@@ -197,19 +197,17 @@ export class Chat implements OnInit, AfterViewInit {
       const c = this.selectedChannel as any;
       this.statusMsg = `Joined ${g?.name || this.selectedGroupId} / #${c?.name || this.selectedChannelId}`;
       if (Array.isArray(ack.history)) {
-        // Replace messages array with persisted history
+  // Replace with initial history
         this.messages = ack.history.map(h => this.buildMessage(h));
         this.historyLoaded = true;
-        // Always scroll on initial history load for a room
+  // Scroll on initial load
         this.deferScrollToBottom();
-        // After initial load we cannot know if more exist; defer until user presses load older
-        // Basic heuristic: if we received fewer than 50 messages, assume no more
+  // Heuristic: fewer than a full page => likely no more
   this.hasMore = this.messages.length >= HISTORY_PAGE_SIZE; // page size heuristic
       }
       const ackAny: any = ack;
       if (Array.isArray(ackAny.roster)) {
-        // Use server-provided enriched roster immediately
-        // DO NOT clear existing rosterMap so if a fast-follow roster push lacks avatar we retain avatars
+  // Use enriched roster; keep existing avatar mappings
         this.roster = ackAny.roster.slice().map((x:any)=> {
           const av = this.absUrl(x.avatarUrl);
           if (av) this.rosterMap.set(String(x.username).toLowerCase(), av);
@@ -228,7 +226,7 @@ export class Chat implements OnInit, AfterViewInit {
         if (ack?.ok && Array.isArray(ack.roster)) {
           // eslint-disable-next-line no-console
           console.log('[chat] roster ack', ack.roster);
-          // Merge roster without removing known avatars
+          // Merge roster; retain existing avatars
           const merged = ack.roster.slice().map((x:any) => {
             const key = String(x.username).toLowerCase();
             const incoming = this.absUrl(x.avatarUrl);
@@ -273,12 +271,12 @@ export class Chat implements OnInit, AfterViewInit {
   this.api.getMessages(this.selectedGroupId, this.selectedChannelId, { user: username, limit: HISTORY_PAGE_SIZE, beforeTs }).subscribe({
       next: (res) => {
   const incoming = (res.messages || []).filter(m => !this.messages.some(ex => ex.id === m.id));
-        // Prepend older messages
+  // Prepend older messages (pagination backward)
         const mapped = incoming.map(m => this.buildMessage(m));
         this.messages = [...mapped, ...this.messages];
-        // Use server's hasMore directly (accurate via limit+1 strategy); if no new messages, hasMore false
+  // Accurate hasMore from server (limit+1 strategy)
         this.hasMore = !!res.hasMore;
-        // Preserve scroll position after prepending
+  // Preserve scroll anchor after prepend
         queueMicrotask(() => {
           if (prevScrollEl) {
             const newHeight = prevScrollEl.scrollHeight;
@@ -296,16 +294,16 @@ export class Chat implements OnInit, AfterViewInit {
   async onSend() {
     const text = (this.messageText || '').trim();
     if (!text || !this.selectedGroupId || !this.selectedChannelId) return;
-    // Send via socket; rely on server echo to append
+  // Emit via socket; rely on echo to append
     this.errorMsg = '';
     const ack = await this.sockets.send(text);
     if (!ack?.ok) {
       this.errorMsg = ack?.error || 'Failed to send message';
     }
     this.messageText = '';
-    // Ensure typing indicator cleared after send
+  // Clear typing indicator after send
     this.stopTyping();
-    // If user just sent a message, keep them at bottom
+  // Keep scroll pinned after send
     this.deferScrollToBottom();
   }
 
@@ -313,14 +311,14 @@ export class Chat implements OnInit, AfterViewInit {
     const input = ev.target as HTMLInputElement;
     if (!input.files || !input.files.length) return;
     const file = input.files[0];
-    // Basic client-side validation
+  // Client-side image type validation
     if (!file.type.startsWith('image/')) { this.errorMsg = 'Invalid image type'; return; }
     const username = this.username();
     if (!username) { this.errorMsg = 'Not authenticated'; return; }
     try {
       const res: any = await this.api.uploadMessageImage(file, { username, groupId: this.selectedGroupId, channelId: this.selectedChannelId }).toPromise();
       if (res?.ok && res.url) {
-        // Send empty text if user hasn't typed anything, embed image attachment
+  // Send message with image attachment (text optional)
         const ack = await this.sockets.send(this.messageText.trim(), { imageUrl: res.url });
         if (!ack?.ok) this.errorMsg = ack?.error || 'Failed to send image';
         this.messageText = '';
@@ -341,7 +339,7 @@ export class Chat implements OnInit, AfterViewInit {
       this.sockets.setTyping(true);
     }
     if (this.typingTimer) clearTimeout(this.typingTimer);
-    // Inactivity threshold to stop typing
+  // Typing inactivity timeout
   this.typingTimer = setTimeout(() => this.stopTyping(), TYPING_INACTIVITY_MS);
   }
 
@@ -363,7 +361,7 @@ export class Chat implements OnInit, AfterViewInit {
   }
 
   private deferScrollToBottom() {
-    // allow Angular change detection to render messages first
+  // Wait a tick so DOM reflects new messages
     queueMicrotask(() => this.scrollToBottom());
   }
 

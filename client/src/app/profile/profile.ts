@@ -82,5 +82,5 @@ export class Profile implements OnInit {
     }
   }
 
-  // Removed makeAbsolute in favor of shared absoluteUrl()
+  // (absoluteUrl helper centralizes base URL handling)
 }

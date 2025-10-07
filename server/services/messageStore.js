@@ -1,16 +1,13 @@
-// Message persistence (Mongo) kept separate from socket code for clarity.
-// Provides save + history retrieval constrained by group/channel.
+// Message persistence: save chat messages and retrieve channel history.
 const { getDb } = require('../db/mongo');
 const { ATTACHMENT_MAX_PER_MESSAGE, DEFAULT_HISTORY_LIMIT } = require('../constants');
 
-// saveMessage expects avatarUrl and attachment URLs to already be normalized to relative paths
-// (e.g. /uploads/filename.png). The socket layer is responsible for converting relative -> absolute
-// when emitting to clients while keeping only the relative path in persistence per requirements.
+// Assumes avatarUrl & attachment URLs are relative (e.g. /uploads/file.png); sockets layer emits absolute variants.
 async function saveMessage({ id, groupId, channelId, username, text, ts, attachments, avatarUrl }) {
   const { messages } = await ensureCollection();
   const doc = { id, groupId, channelId, username, text, ts };
   if (attachments && Array.isArray(attachments) && attachments.length) {
-    // Persist only first ATTACHMENT_MAX_PER_MESSAGE attachments (soft cap) and only relative URLs
+    // Cap attachments by ATTACHMENT_MAX_PER_MESSAGE
     doc.attachments = attachments.slice(0, ATTACHMENT_MAX_PER_MESSAGE).map(a => ({ ...a }));
   }
   if (avatarUrl) doc.avatarUrl = avatarUrl; // relative path only
@@ -18,10 +15,7 @@ async function saveMessage({ id, groupId, channelId, username, text, ts, attachm
   return doc;
 }
 
-// Retrieve messages newest-last (chronological ascending).
-// Options:
-//  - limit (default 50)
-//  - beforeTs: only messages with ts < beforeTs (for pagination backwards)
+// Retrieve channel messages (chronological ascending) with optional pagination.
 async function history(groupId, channelId, { limit = DEFAULT_HISTORY_LIMIT, beforeTs } = {}) {
   const { messages } = await ensureCollection();
   const q = { groupId, channelId };

@@ -3,8 +3,7 @@ const router = express.Router();
 const { canAccessGroup } = require('../utils/access');
 const asyncHandler = require('../utils/asyncHandler');
 
-// GET /api/messages/:groupId/:channelId?limit=50&beforeTs=1234567890&user=alice
-// Uses a limit+1 strategy for accurate hasMore detection.
+// GET history with optional limit & beforeTs; uses limit+1 to compute hasMore.
 router.get('/:groupId/:channelId', asyncHandler(async (req, res) => {
   const { groupId, channelId } = req.params;
   const { user: username, limit, beforeTs } = req.query || {};
