@@ -11,6 +11,8 @@ describe('Real-Time Multi-User Messaging', () => {
   const userB = `userb_${unique}`;
   const msgFromA = `Hello from A ${unique}`;
   const msgFromB = `Reply from B ${unique}`;
+  const msgFromA2 = `Second from A ${unique}`;
+  const msgFromB2 = `Second from B ${unique}`;
 
   before(() => {
     cy.apiLogin('super');
@@ -23,7 +25,7 @@ describe('Real-Time Multi-User Messaging', () => {
     cy.selectGroupChannel(gName, cName);
   }
 
-  it('exchanges messages between two users', () => {
+  it('exchanges messages between two users with ordering, typing indicators and persistence', () => {
     // Session A (super)
     cy.session('superSession', () => {
       cy.apiLogin('super');
@@ -51,23 +53,81 @@ describe('Real-Time Multi-User Messaging', () => {
       });
     });
 
-    // Now userB is a member. Send message as A.
-    cy.apiLogin('super');
-    openChatAndSelect(groupName, channelName);
+  // Now userB is a member. Send message as A (first message)
+  cy.apiLogin('super');
+  openChatAndSelect(groupName, channelName);
   cy.sendChatMessage(msgFromA);
-    cy.contains('[data-cy=message-list] [data-cy^=message-] .text span', msgFromA, { timeout: 10000 }).should('exist');
+  cy.contains('[data-cy=message-list] [data-cy^=message-] .text span', msgFromA, { timeout: 10000 }).should('exist');
 
-    // Switch to user B and verify A's message visible, then reply.
+    // Switch to user B and verify A's message visible, then simulate typing indicator then reply.
     cy.apiLogin(userB, '123');
     openChatAndSelect(groupName, channelName);
     cy.contains('[data-cy=message-list] [data-cy^=message-] .text span', msgFromA, { timeout: 10000 }).should('exist');
-
-  cy.sendChatMessage(msgFromB);
+    // Typing indicator: start typing but not send yet (if UI supports). We'll type partial then clear when sending.
+    cy.get('[data-cy=chat-input]').type('Typing...');
+    // If typing indicator element exists, assert contains userB
+    cy.get('body').then($b => {
+      if ($b.find('[data-cy=typing-indicators]').length) {
+        cy.get('[data-cy=typing-indicators]').contains(userB, { matchCase: false });
+      }
+    });
+    // Replace with actual message send (this should also clear typing state)
+    cy.get('[data-cy=chat-input]').clear();
+    cy.sendChatMessage(msgFromB);
     cy.contains('[data-cy=message-list] [data-cy^=message-] .text span', msgFromB, { timeout: 10000 }).should('exist');
+    // Optional: indicator should disappear
+    cy.get('body').then($b => {
+      if ($b.find('[data-cy=typing-indicators]').length) {
+        cy.get('[data-cy=typing-indicators]').should('not.contain.text', userB);
+      }
+    });
 
-    // Back to A to assert B's message (simulate by reauth as A)
+    // Back to A to assert B's message, then A sends second message
     cy.apiLogin('super');
     openChatAndSelect(groupName, channelName);
     cy.contains('[data-cy=message-list] [data-cy^=message-] .text span', msgFromB, { timeout: 10000 }).should('exist');
+    cy.sendChatMessage(msgFromA2);
+    cy.contains('[data-cy=message-list] [data-cy^=message-] .text span', msgFromA2, { timeout: 10000 }).should('exist');
+
+    // Switch to B, confirm second message, send a second reply
+    cy.apiLogin(userB, '123');
+    openChatAndSelect(groupName, channelName);
+    cy.contains('[data-cy=message-list] [data-cy^=message-] .text span', msgFromA2, { timeout: 10000 }).should('exist');
+    cy.sendChatMessage(msgFromB2);
+    cy.contains('[data-cy=message-list] [data-cy^=message-] .text span', msgFromB2, { timeout: 10000 }).should('exist');
+
+    // Validate ordering of the last four messages (chronological)
+    const ordered = [msgFromA, msgFromB, msgFromA2, msgFromB2];
+    cy.get('[data-cy=message-list] [data-cy^=message-] .text span').then($spans => {
+      const texts = Array.from($spans).map(el => el.textContent?.trim()).filter(Boolean);
+      // Extract only occurrences of our tracked messages preserving order
+      const ours = texts.filter(t => ordered.includes(t));
+      expect(ours).to.deep.equal(ordered);
+    });
+
+    // Reload persistence check (user B)
+    cy.reload();
+    for (const m of [msgFromA, msgFromB, msgFromA2, msgFromB2]) {
+      cy.contains('[data-cy=message-list] [data-cy^=message-] .text span', m, { timeout: 10000 }).should('exist');
+    }
+    // Attribution: ensure each message element shows correct username (if username node present)
+    cy.get('[data-cy=message-list] [data-cy^=message-]').then($msgs => {
+      const lookups = {
+        [msgFromA]: 'super',
+        [msgFromB]: userB,
+        [msgFromA2]: 'super',
+        [msgFromB2]: userB
+      };
+      $msgs.each((_, li) => {
+        const textEl = li.querySelector('.text span');
+        if (!textEl) return;
+        const body = textEl.textContent?.trim();
+        if (!body || !lookups[body]) return;
+        const userEl = li.querySelector('.username');
+        if (userEl) {
+          expect(userEl.textContent?.toLowerCase()).to.include(lookups[body].toLowerCase());
+        }
+      });
+    });
   });
 });

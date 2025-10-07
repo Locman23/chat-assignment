@@ -5,6 +5,8 @@ const fs = require('fs');
 const { getCollections, normalize } = require('../db/mongo');
 const { canAccessGroup } = require('../utils/access');
 const asyncHandler = require('../utils/asyncHandler');
+const { publicBase } = require('../utils/base');
+const { shortId } = require('../utils/ids');
 
 // Ensure uploads directory exists.
 const uploadRoot = path.join(__dirname, '..', 'uploads');
@@ -15,7 +17,7 @@ const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadRoot),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const name = `${Date.now()}-${Math.random().toString(36).slice(2,8)}${ext}`;
+    const name = `${shortId()}${ext}`;
     cb(null, name);
   }
 });
@@ -40,9 +42,7 @@ router.post('/avatar', upload.single('avatar'), asyncHandler(async (req, res) =>
   const user = await users.findOne({ username: { $regex: `^${normalize(requester)}$`, $options: 'i' } });
   if (!user) return res.status(404).json({ error: 'user not found' });
   const relative = `/uploads/${req.file.filename}`;
-  const { publicBase } = require('../utils/base');
-  const base = publicBase();
-  const absolute = `${base}${relative}`;
+  const absolute = `${publicBase()}${relative}`;
   await users.updateOne({ id: user.id }, { $set: { avatarUrl: relative } }); // store relative in DB
   const updated = await users.findOne({ id: user.id }, { projection: { _id: 0 } });
   res.json({ ok: true, user: updated, avatarUrl: absolute });
@@ -55,9 +55,7 @@ router.post('/message-image', upload.single('image'), asyncHandler(async (req, r
   if (!(await canAccessGroup(username, groupId))) return res.status(403).json({ error: 'not authorized' });
   if (!req.file) return res.status(400).json({ error: 'file required' });
   const relative = `/uploads/${req.file.filename}`;
-  const { publicBase } = require('../utils/base');
-  const base = publicBase();
-  res.json({ ok: true, url: `${base}${relative}` });
+  res.json({ ok: true, url: `${publicBase()}${relative}` });
 }));
 
 module.exports = router;
