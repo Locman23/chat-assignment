@@ -1,20 +1,29 @@
-// Message persistence (Mongo) kept separate from socket code for clarity.
-// Provides save + history retrieval constrained by group/channel.
+// Message persistence: save chat messages and retrieve channel history.
 const { getDb } = require('../db/mongo');
+const { ATTACHMENT_MAX_PER_MESSAGE, DEFAULT_HISTORY_LIMIT } = require('../constants');
 
-async function saveMessage({ id, groupId, channelId, username, text, ts }) {
+// Assumes avatarUrl & attachment URLs are relative (e.g. /uploads/file.png); sockets layer emits absolute variants.
+async function saveMessage({ id, groupId, channelId, username, text, ts, attachments, avatarUrl }) {
   const { messages } = await ensureCollection();
   const doc = { id, groupId, channelId, username, text, ts };
+  if (attachments && Array.isArray(attachments) && attachments.length) {
+    // Cap attachments by ATTACHMENT_MAX_PER_MESSAGE
+    doc.attachments = attachments.slice(0, ATTACHMENT_MAX_PER_MESSAGE).map(a => ({ ...a }));
+  }
+  if (avatarUrl) doc.avatarUrl = avatarUrl; // relative path only
   await messages.insertOne(doc);
   return doc;
 }
 
-async function history(groupId, channelId, { limit = 50 } = {}) {
+// Retrieve channel messages (chronological ascending) with optional pagination.
+async function history(groupId, channelId, { limit = DEFAULT_HISTORY_LIMIT, beforeTs } = {}) {
   const { messages } = await ensureCollection();
   const q = { groupId, channelId };
-  const cursor = messages.find(q).sort({ ts: -1 }).limit(limit);
+  if (beforeTs) {
+    q.ts = { $lt: Number(beforeTs) };
+  }
+  const cursor = messages.find(q, { projection: { _id: 0 } }).sort({ ts: -1 }).limit(limit);
   const list = await cursor.toArray();
-  // Return newest last (chronological ascending)
   return list.reverse();
 }
 

@@ -1,20 +1,32 @@
-<section class="panel panel-wide card">
+<section class="panel panel-wide card" data-cy="profile-page">
   <h2>Profile</h2>
   <p class="muted">Update your username, email and password. Leave the password blank to keep the current one.</p>
 
-  <form (ngSubmit)="save()" #f="ngForm" class="form-inline mt-2">
+  <div class="avatar-section" *ngIf="auth.user() as u" data-cy="avatar-section">
+    <div class="avatar-preview">
+  <img *ngIf="(avatarPreview || u.avatarUrl) as src" [src]="src" alt="avatar" class="avatar-img" data-cy="avatar-img" />
+      <div *ngIf="!(avatarPreview || u.avatarUrl)" class="avatar-placeholder">No avatar</div>
+    </div>
+    <label class="btn secondary" style="margin-top:8px;">
+      Change Avatar
+  <input type="file" accept="image/*" (change)="onAvatarChange($event)" hidden data-cy="avatar-input" />
+    </label>
+    <div *ngIf="uploading" class="muted small">Uploading...</div>
+  </div>
+
+  <form (ngSubmit)="save()" #f="ngForm" class="form-inline mt-2" data-cy="profile-form">
     <label class="sr-only">Username</label>
-    <input class="input" name="username" [(ngModel)]="form.username" required placeholder="Username" />
+  <input class="input" name="username" [(ngModel)]="form.username" required placeholder="Username" data-cy="profile-username" />
 
     <label class="sr-only">Email</label>
-    <input class="input" name="email" [(ngModel)]="form.email" type="email" placeholder="Email" />
+  <input class="input" name="email" [(ngModel)]="form.email" type="email" placeholder="Email" data-cy="profile-email" />
 
     <label class="sr-only">New password</label>
-    <input class="input" name="password" [(ngModel)]="form.password" type="password" placeholder="New password (leave blank to keep)" />
+  <input class="input" name="password" [(ngModel)]="form.password" type="password" placeholder="New password (leave blank to keep)" data-cy="profile-password" />
 
-    <button class="btn" type="submit">Save</button>
+    <button class="btn" type="submit" data-cy="profile-save">Save</button>
   </form>
 
-  <div *ngIf="error" class="msg msg-error">{{ error }}</div>
-  <div *ngIf="success" class="msg msg-success">{{ success }}</div>
+  <div *ngIf="error" class="msg msg-error" data-cy="profile-error">{{ error }}</div>
+  <div *ngIf="success" class="msg msg-success" data-cy="profile-success">{{ success }}</div>
 </section>

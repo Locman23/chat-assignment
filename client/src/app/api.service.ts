@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { API_BASE } from './config';
 
 @Injectable({ providedIn: 'root' })
 export class Api {
-  base = 'http://localhost:3000/api';
+  base = API_BASE;
   constructor(private http: HttpClient) {}
 
   login(payload: { username: string; password: string }) {
@@ -94,5 +95,30 @@ export class Api {
   // Update user profile (username/email/password). requester must be provided.
   updateUserProfile(userId: string, payload: { username?: string; email?: string; password?: string; requester: string }) {
     return this.http.put<{ user: any }>(`${this.base}/users/${userId}`, payload);
+  }
+
+  uploadAvatar(file: File, requester: string) {
+    const fd = new FormData();
+    fd.append('avatar', file);
+    fd.append('requester', requester);
+    return this.http.post<{ ok: boolean; user: any; avatarUrl: string }>(`${this.base}/uploads/avatar`, fd);
+  }
+
+  uploadMessageImage(file: File, payload: { username: string; groupId: string; channelId: string }) {
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('username', payload.username);
+    fd.append('groupId', payload.groupId);
+    fd.append('channelId', payload.channelId);
+    return this.http.post<{ ok: boolean; url: string }>(`${this.base}/uploads/message-image`, fd);
+  }
+
+  // Paginated message history (older messages): pass beforeTs to page backwards
+  getMessages(groupId: string, channelId: string, opts: { user: string; limit?: number; beforeTs?: number }) {
+    const params = new URLSearchParams();
+    params.set('user', opts.user);
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.beforeTs) params.set('beforeTs', String(opts.beforeTs));
+    return this.http.get<{ messages: any[]; hasMore?: boolean }>(`${this.base}/messages/${groupId}/${channelId}?${params.toString()}`);
   }
 }

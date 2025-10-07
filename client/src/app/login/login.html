@@ -1,9 +1,9 @@
-<section class="card mx-auto max-w-420 mt-6 elev-sm">
+<section class="card mx-auto max-w-420 mt-6 elev-sm" data-cy="login-page">
   <h2>Login</h2>
-  <form (ngSubmit)="submit()" #f="ngForm" class="form-inline stacked">
-    <input class="input" [(ngModel)]="username" name="username" placeholder="username" required />
-    <input class="input" [(ngModel)]="password" name="password" placeholder="password" type="password" required />
-    <button class="btn" type="submit" [disabled]="f.invalid || busy">Login</button>
+  <form (ngSubmit)="submit()" #f="ngForm" class="form-inline stacked" data-cy="login-form">
+    <input class="input" [(ngModel)]="username" name="username" placeholder="username" required data-cy="login-username" />
+    <input class="input" [(ngModel)]="password" name="password" placeholder="password" type="password" required data-cy="login-password" />
+    <button class="btn" type="submit" [disabled]="f.invalid || busy" data-cy="login-submit">Login</button>
   </form>
-  <p *ngIf="error" class="msg msg-error">{{ error }}</p>
+  <p *ngIf="error" class="msg msg-error" data-cy="login-error">{{ error }}</p>
 </section>

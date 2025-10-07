@@ -1,32 +1,26 @@
 const express = require('express');
 const router = express.Router();
-const { history } = require('../services/messageStore');
-const { getCollections, normalize } = require('../db/mongo');
+const { canAccessGroup } = require('../utils/access');
+const asyncHandler = require('../utils/asyncHandler');
 
-async function canAccess(username, groupId) {
-  const { groups, users } = getCollections();
-  const g = await groups.findOne({ id: groupId });
-  if (!g) return false;
-  const u = await users.findOne({ username: { $regex: `^${normalize(username)}$`, $options: 'i' } });
-  if (!u) return false;
-  if ((u.roles || []).includes('Super Admin')) return true;
-  return (g.members || []).map(normalize).includes(normalize(username));
-}
-
-// GET /api/messages/:groupId/:channelId?limit=50&user=alice
-router.get('/:groupId/:channelId', async (req, res) => {
+// GET history with optional limit & beforeTs; uses limit+1 to compute hasMore.
+router.get('/:groupId/:channelId', asyncHandler(async (req, res) => {
   const { groupId, channelId } = req.params;
-  const { user: username, limit } = req.query || {};
+  const { user: username, limit, beforeTs } = req.query || {};
   if (!username) return res.status(400).json({ error: 'user query param required' });
-  if (!(await canAccess(username, groupId))) return res.status(403).json({ error: 'not authorized' });
-  try {
-    const lim = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
-    const list = await history(groupId, channelId, { limit: lim });
-    res.json({ messages: list });
-  } catch (e) {
-    console.error('[messages] history error', e);
-    res.status(500).json({ error: 'failed to load history' });
-  }
-});
+  if (!(await canAccessGroup(username, groupId))) return res.status(403).json({ error: 'not authorized' });
+  const { MAX_HISTORY_LIMIT, DEFAULT_HISTORY_LIMIT } = require('../constants');
+  const limRequested = Math.min(MAX_HISTORY_LIMIT, Math.max(1, parseInt(limit, 10) || DEFAULT_HISTORY_LIMIT));
+  const effectiveBefore = beforeTs ? Number(beforeTs) : undefined;
+  const { getDb } = require('../db/mongo');
+  const messagesCol = getDb().collection('messages');
+  const q = { groupId, channelId };
+  if (effectiveBefore) q.ts = { $lt: effectiveBefore };
+  const docs = await messagesCol.find(q, { projection: { _id: 0 } }).sort({ ts: -1 }).limit(limRequested + 1).toArray();
+  const hasMore = docs.length > limRequested;
+  const slice = hasMore ? docs.slice(0, limRequested) : docs;
+  const messagesAsc = slice.slice().reverse();
+  res.json({ messages: messagesAsc, hasMore });
+}));
 
 module.exports = router;

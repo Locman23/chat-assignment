@@ -2,6 +2,17 @@ const express = require('express');
 const router = express.Router();
 const { getCollections, makeGid, makeCid, normalize } = require('../db/mongo');
 
+/*
+Group & channel management:
+Data shape: { id, name, ownerUsername, admins[], members[], channels[{id,name}] }
+Roles (coarse): Super Admin (global), Group Admin (global role elevating user), owner (per-group implicit admin).
+Authorization checks are repeated inline for clarity given small surface area.
+Case-insensitive identity comparisons use normalize() to prevent duplicate logical entries.
+Future hardening:
+ - Extract repeated auth logic into middleware.
+ - Add Mongo indexes for uniqueness (e.g., group id, channel ids) & channel name per group if scaling.
+*/
+
 async function getUserByUsername(username) {
   const { users } = getCollections();
   if (!username) return null;
@@ -19,14 +30,14 @@ async function attachGroupToUser(username, gid) {
 }
 
 // GET /api/groups
-router.get('/', async (_req, res) => {
+router.get('/', async (_req, res) => { // list all groups (no pagination yet)
   const { groups } = getCollections();
   const list = await groups.find({}).project({ _id: 0 }).toArray();
   res.json({ groups: list });
 });
 
 // POST /api/groups
-router.post('/', async (req, res) => {
+router.post('/', async (req, res) => { // create new group (owner must be Group Admin or Super Admin)
   const { name, ownerUsername } = req.body || {};
   if (!name?.trim()) return res.status(400).json({ error: 'group name required' });
   if (!ownerUsername?.trim()) return res.status(400).json({ error: 'ownerUsername required' });
@@ -42,14 +53,14 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/groups/:gid
-router.get('/:gid', async (req, res) => {
+router.get('/:gid', async (req, res) => { // fetch single group summary
   const g = await getGroupById(req.params.gid);
   if (!g) return res.status(404).json({ error: 'group not found' });
   return res.json({ id: g.id, name: g.name, ownerUsername: g.ownerUsername, members: g.members, channels: g.channels });
 });
 
 // DELETE /api/groups/:gid
-router.delete('/:gid', async (req, res) => {
+router.delete('/:gid', async (req, res) => { // delete whole group (owner or Super Admin)
   const { gid } = req.params;
   const { requester } = req.body || {};
   const { groups, users } = getCollections();
@@ -65,7 +76,7 @@ router.delete('/:gid', async (req, res) => {
 });
 
 // POST /api/groups/:gid/members
-router.post('/:gid/members', async (req, res) => {
+router.post('/:gid/members', async (req, res) => { // add member (Super / owner / group admin)
   const { gid } = req.params;
   const { username, requester } = req.body || {};
   if (!username?.trim()) return res.status(400).json({ error: 'username required' });
@@ -88,7 +99,7 @@ router.post('/:gid/members', async (req, res) => {
 });
 
 // DELETE /api/groups/:gid/members
-router.delete('/:gid/members', async (req, res) => {
+router.delete('/:gid/members', async (req, res) => { // remove member (Super / owner / group admin)
   const { gid } = req.params;
   const { username, requester } = req.body || {};
   if (!username?.trim()) return res.status(400).json({ error: 'username required' });
@@ -107,7 +118,7 @@ router.delete('/:gid/members', async (req, res) => {
 });
 
 // POST /api/groups/:gid/channels
-router.post('/:gid/channels', async (req, res) => {
+router.post('/:gid/channels', async (req, res) => { // create channel inside group (Super / owner / group admin)
   const { name, requester } = req.body || {};
   if (!name?.trim()) return res.status(400).json({ error: 'channel name required' });
   const { groups } = getCollections();
@@ -126,14 +137,14 @@ router.post('/:gid/channels', async (req, res) => {
 });
 
 // GET /api/groups/:gid/channels
-router.get('/:gid/channels', async (req, res) => {
+router.get('/:gid/channels', async (req, res) => { // list channels in a group
   const g = await getGroupById(req.params.gid);
   if (!g) return res.status(404).json({ error: 'group not found' });
   return res.json({ channels: g.channels || [] });
 });
 
 // POST /api/groups/:gid/admins
-router.post('/:gid/admins', async (req, res) => {
+router.post('/:gid/admins', async (req, res) => { // add group admin (requires Super Admin OR group owner)
   const { gid } = req.params;
   const { username, requester } = req.body || {};
   if (!username?.trim()) return res.status(400).json({ error: 'username required' });
@@ -155,7 +166,7 @@ router.post('/:gid/admins', async (req, res) => {
 });
 
 // DELETE /api/groups/:gid/admins
-router.delete('/:gid/admins', async (req, res) => {
+router.delete('/:gid/admins', async (req, res) => { // remove group admin (Super Admin or owner; cannot remove owner)
   const { gid } = req.params;
   const { username, requester } = req.body || {};
   if (!username?.trim()) return res.status(400).json({ error: 'username required' });
