@@ -41,8 +41,31 @@ Frontend structure (selected):
 
 ## 2. Data Structures (Server & Client Shapes)
 
-### MongoDB Collections
-All persisted documents omit internal `_id` when served to the client (custom `id` fields used for correlation).
+This section details the core persisted and in‑memory structures. All MongoDB documents are served without the internal `_id`; a stable `id` is used for client correlation.
+
+### 2.1 Summary Table
+
+| Entity | Stored Fields | Notes | Source of Truth |
+|--------|---------------|-------|-----------------|
+| User | id, username, email, password, roles[], groups[], avatarUrl? | `password` plain (dev). `roles` drive permissions. | Mongo `users` |
+| Group | id, name, ownerUsername, admins[], members[], channels[] | Channels embedded as array of {id,name}. | Mongo `groups` |
+| Channel | id, name | Embedded only; no standalone collection. | Group.channels |
+| JoinRequest | id, gid, username, status, createdAt, processedBy?, processedAt? | Lifecycle: pending → approved/denied. | Mongo `joinRequests` |
+| Message | id, groupId, channelId, username, text?, ts, avatarUrl?, attachments[] | attachments = [{ type:'image', url }]. | Mongo `messages` |
+| Presence (ephemeral) | roomId → { username → sockets:Set } | Not persisted; recalculated on restart. | In-memory Map |
+| Typing (ephemeral) | roomId → { username → lastActivityTs } | Entries pruned after timeout. | In-memory Map |
+
+### 2.2 Conceptual TypeScript Interfaces
+```ts
+interface User { id:string; username:string; email?:string; password?:string; roles:string[]; groups:string[]; avatarUrl?:string }
+interface Channel { id:string; name:string }
+interface Group { id:string; name:string; ownerUsername:string; admins:string[]; members:string[]; channels:Channel[] }
+interface JoinRequest { id:string; gid:string; username:string; status:'pending'|'approved'|'denied'; createdAt:number; processedBy?:string; processedAt?:number }
+interface Attachment { type:'image'; url:string }
+interface Message { id:string; groupId:string; channelId:string; username:string; text?:string; ts:number; avatarUrl?:string; attachments?:Attachment[] }
+```
+
+### 2.3 MongoDB Collections (Detailed Examples)
 
 1. User
 ```jsonc
@@ -100,12 +123,12 @@ All persisted documents omit internal `_id` when served to the client (custom `i
 }
 ```
 
-### In‑Memory (Ephemeral) Structures
+### 2.4 In‑Memory (Ephemeral) Structures
 - Presence: `Map<roomId, Map<usernameLower, { username, sockets:Set<socketId> }>>`
 - Typing: `Map<roomId, Map<username, lastTypingActivityTs>>` (stale entries auto-pruned)
 
-### Client Mirrors
-The Angular app uses plain TypeScript object literals mirroring server JSON (no heavy model layer). Data flows via `ApiService` and is cached short‑term in component state.
+### 2.5 Client Mirrors
+Angular uses lightweight object literals matching these shapes (no dedicated model classes required at this phase). Data arrives via `ApiService` (REST) and `SocketService` (real-time) and lives in component state.
 
 ## 3. Responsibility Split: Client vs Server
 
@@ -124,90 +147,101 @@ The Angular app uses plain TypeScript object literals mirroring server JSON (no 
 
 Base: `http://localhost:3000/api`
 
-### Auth
-- `POST /auth/login` — body `{ username, password }` → `{ user }`, 401 on failure.
+### 4.1 Tabular Reference
 
-### Users
-- `GET /users` → `{ users: [...] }`
-- `POST /users` body `{ username, email?, password? }` → `201 { user }` (409 if taken)
-- `PUT /users/:id/role` body `{ role, requester }` → `{ user }`
-- `PUT /users/:id` body `{ username?, email?, password?, requester }` → `{ user }`
-- `DELETE /users/:id` body `{ requester }` → `{ success: true }`
+| Method | Path | Body / Query Params | Success Response | Purpose |
+|--------|------|---------------------|------------------|---------|
+| POST | /auth/login | { username, password } | { user } | Authenticate user |
+| GET | /users | – | { users } | List users |
+| POST | /users | { username, email?, password? } | { user } (201) | Create user |
+| PUT | /users/:id/role | { role, requester } | { user } | Change role |
+| PUT | /users/:id | { username?, email?, password?, requester } | { user } | Update profile |
+| DELETE | /users/:id | { requester } | { success:true } | Delete user |
+| GET | /groups | – | { groups } | List groups |
+| POST | /groups | { name, ownerUsername } | { group } (201) | Create group |
+| GET | /groups/:gid | – | Group doc | Group detail |
+| DELETE | /groups/:gid | { requester } | { success:true } | Delete group |
+| POST | /groups/:gid/members | { username, requester } | { members } (201) | Add member |
+| DELETE | /groups/:gid/members | { username, requester } | { members } | Remove member |
+| POST | /groups/:gid/channels | { name, requester } | { channel } (201) | Create channel |
+| GET | /groups/:gid/channels | – | { channels } | List channels |
+| POST | /groups/:gid/admins | { username, requester } | { admins } (201) | Add group admin |
+| DELETE | /groups/:gid/admins | { username, requester } | { admins } | Remove group admin |
+| POST | /groups/:gid/requests | { username } | { request } (201) | Create join request |
+| GET | /requests?requester=super | requester (query) | { requests } | List join requests (Super) |
+| PUT | /requests/:rid/approve | { requester } | { request, members } | Approve join |
+| PUT | /requests/:rid/deny | { requester } | { request } | Deny join |
+| GET | /messages/:groupId/:channelId | query: user, limit, beforeTs | { messages, hasMore } | Paginate history |
+| POST | /uploads/avatar | multipart avatar + requester | { ok, user, avatarUrl } | Upload avatar |
+| POST | /uploads/message-image | multipart image + { username, groupId, channelId } | { ok, url } | Upload message image |
+| GET | /health | – | { ok, uptimeSec, ... } | Health info |
+| GET | /ping | – | pong | Liveness check |
 
-### Groups & Channels
-- `GET /groups` → `{ groups: [...] }`
-- `POST /groups` body `{ name, ownerUsername }` → `201 { group }`
-- `GET /groups/:gid` → group summary
-- `DELETE /groups/:gid` body `{ requester }` → `{ success: true }`
-- `POST /groups/:gid/members` body `{ username, requester }` → `201 { members }`
-- `DELETE /groups/:gid/members` body `{ username, requester }` → `{ members }`
-- `POST /groups/:gid/channels` body `{ name, requester }` → `201 { channel }`
-- `GET /groups/:gid/channels` → `{ channels }`
-- `POST /groups/:gid/admins` body `{ username, requester }` → `201 { admins }`
-- `DELETE /groups/:gid/admins` body `{ username, requester }` → `{ admins }`
-
-### Join Requests
-- `POST /groups/:gid/requests` body `{ username }` → `201 { request }`
-- `GET /requests?requester=super` (Super only) → `{ requests }`
-- `PUT /requests/:rid/approve` body `{ requester }` → `{ request, members }`
-- `PUT /requests/:rid/deny` body `{ requester }` → `{ request }`
-
-### Messages (History Pagination)
-- `GET /messages/:groupId/:channelId?user=<u>&limit=<n>&beforeTs=<epoch>`
-  - Returns `{ messages:[...], hasMore: boolean }`
-  - Sorted ascending client-side; server queries descending & slices.
-
-### Uploads
-- `POST /uploads/avatar` multipart field `avatar`, body `requester` → `{ ok, user, avatarUrl }`
-- `POST /uploads/message-image` multipart field `image`, body `{ username, groupId, channelId }` → `{ ok, url }`
-
-### Health & Utility
-- `GET /health` → `{ ok, uptimeSec, userCount?, groupCount?, joinRequestCount? }`
-- `GET /ping` → `pong` (text)
+### 4.2 Notes
+- Standard HTTP codes: 200/201 success; 400 invalid input; 401/403 auth/permission; 404 not found; 409 conflict.
+- Pagination for messages uses `limit` (default server-side) and `beforeTs` for backward paging.
+- `requester` field is required on mutating endpoints for authorization validation.
 
 ## 5. Real-Time Socket.IO Events
 
-Room naming: `roomId = <groupId>:<channelId>`
+Room naming convention: `roomId = <groupId>:<channelId>` ensures isolation per channel.
 
-Client -> Server:
-- `chat:join` `{ username, groupId, channelId }` ack `{ ok, history, roster }`
-- `chat:leave` ack `{ ok }`
-- `chat:message` `{ text?, imageUrl?, attachments? }` ack `{ ok, message }`
-- `chat:typing` `{ isTyping: boolean }` ack `{ ok }`
-- `chat:roster:request` ack `{ ok, roster }`
+### 5.1 Event Reference
 
-Server -> Client (broadcast/system):
-- `chat:message` (user + system messages)
-- `chat:presence` `{ users:[...] }` (active presence snapshot)
-- `chat:typing` `{ users:[...] }`
-- `chat:roster` `{ roster:[{ username,status,avatarUrl? }] }`
+| Direction | Event | Payload (Emit) | Ack / Server Response | Description |
+|-----------|-------|----------------|-----------------------|-------------|
+| C → S | chat:join | { username, groupId, channelId } | { ok, history, roster } | Join room; returns recent history + roster |
+| C → S | chat:leave | { groupId, channelId? } | { ok } | Leave current room |
+| C → S | chat:message | { text?, imageUrl?, attachments? } | { ok, message } | Persist & broadcast message (system if generated) |
+| C → S | chat:typing | { isTyping:boolean } | { ok } | Update user's typing state |
+| C → S | chat:roster:request | {} | { ok, roster } | Force roster rebuild/return |
+| S → C | chat:message | { message } | – | New user/system message |
+| S → C | chat:presence | { users } | – | Presence snapshot after join/leave |
+| S → C | chat:typing | { users } | – | Active typing users |
+| S → C | chat:roster | { roster } | – | Membership roster w/ avatar URLs |
 
-System messages are persisted like normal messages (username=`system`).
+### 5.2 System Messages
+Server generates and persists join/leave events as messages with `username = "system"`, allowing consistent rendering & pagination.
+
+### 5.3 Reliability Considerations
+- Client re-fetches history via REST on reconnect if needed; socket join ack also supplies history slice.
+- Presence & typing are ephemeral; stale typing entries are auto-pruned server-side.
 
 ## 6. Angular Architecture
 
-### Components
-- **App**: root shell; registers routes, layout.
-- **Login**: credential form; on success stores user in localStorage.
-- **Dashboard**: CRUD for users, groups, channels, join request moderation.
-- **Chat**: group/channel sidebar, message list, pagination “load older”, typing & presence indicators, image attachment support.
-- **Profile**: edit username/email/password (where allowed) + avatar upload.
+### 6.1 Layer Overview
 
-### Services
-- **ApiService**: REST calls mapping to routes above.
-- **AuthService**: localStorage session management, role helpers.
-- **SocketService**: wraps Socket.IO client (connect, join, leave, send, typing, reactive message stream).
-- **StorageService**: simple wrapper (legacy/backward compatibility).
+| Layer | Items | Responsibilities | Key Files |
+|-------|-------|------------------|-----------|
+| Components (Pages) | App, Login, Dashboard, Chat, Profile | UI composition, user interaction, subscribe to services | `app.ts`, feature folders |
+| (Future) Subcomponents | message-list, message-input | Encapsulate chat UI pieces | (planned) |
+| Services | ApiService, AuthService, SocketService, StorageService | REST, auth/session, real-time orchestration, storage wrapper | `api.service.ts`, `auth.service.ts`, `socket.service.ts`, `storage.service.ts` |
+| Pipes | group-filter, user-filter | Lightweight list filtering in templates | `dashboard/*.pipe.ts` |
+| Guard | AuthGuard | Route access control | `auth.guard.ts` |
+| Styles | Global + feature SCSS | Consistent styling & theming | `styles.scss`, `app.scss` |
 
-### Pipes
-- `group-filter`, `user-filter` – local filtering in dashboard lists.
+### 6.2 Component Roles
+- App: Shell layout + router outlet.
+- Login: Auth form → ApiService.login → AuthService persist.
+- Dashboard: User/group/channel CRUD + join request moderation; role-gated UI actions.
+- Chat: Room join, message stream, pagination (history REST), presence & typing indicators, attachments.
+- Profile: User attribute edits + avatar upload.
 
-### Routing & Guard
-- Auth guard prevents navigation to protected routes if no stored user.
+### 6.3 Services Interaction Diagram
+```
+ApiService  <---- HTTP ---->  Express Routes
+SocketService <--- WebSocket ---> Socket.IO (events)
+AuthService  -> localStorage (auth_user)
+```
 
-### Styling / UX
-- SCSS modules per feature; shared styles in `app.scss` & root `styles.scss`.
-- `data-cy` attributes across interactive elements for deterministic Cypress selection.
+### 6.4 State Handling
+- Stateless global store; components own ephemeral state.
+- Chat maintains per-room message arrays; `beforeTs` used for historical pagination.
+- SocketService (conceptually) exposes Observables/Subjects for messages, presence, typing (implementation may be incremental).
+
+### 6.5 Styling & Testing Aids
+- SCSS modular approach; shared tokens in `app.scss`.
+- `data-cy` selectors on interactive elements guarantee stable E2E targeting.
 
 ## 7. Client ↔ Server Interaction Flows
 
@@ -225,6 +259,18 @@ System messages are persisted like normal messages (username=`system`).
 | Typing | Socket `chat:typing` | In-memory typing map | Typing indicator list refresh |
 | Avatar Upload | POST `/uploads/avatar` | Update user.avatarUrl | Profile & chat message avatars update (roster + message emit) |
 | Leave Channel / Disconnect | Socket `chat:leave` / disconnect | Presence removal, system leave message | Remove from presence list & show system message |
+
+### 7.1 REST & Socket Interoperation
+- REST establishes authenticated context, CRUD operations, history pagination, and file/asset handling.
+- Sockets deliver high-frequency, state-delta events: messages, presence, typing, roster changes.
+- On channel switch: (1) ensure group/channel lists via REST, (2) issue `chat:join` to populate recent history + roster instantly, (3) request older messages via REST if user scrolls up.
+
+### 7.2 Trace Example (Send Message)
+1. User presses send in Chat component.
+2. `SocketService` emits `chat:message` with trimmed text.
+3. Server validates membership + content, persists message with generated id & timestamp.
+4. Server broadcasts `chat:message` to room (including sender).
+5. Chat component appends message; if user is viewing older history, future enhancement could mark unread.
 
 ## 8. Testing Strategy
 
@@ -321,4 +367,3 @@ Global (module) mutable references:
 - [ ] Backend unit tests
 - [ ] Global error middleware & validation layer
 
----
