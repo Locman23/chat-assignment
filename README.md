@@ -6,7 +6,9 @@
 
 ## 1. Repository Organization & Workflow
 
-Monorepo style with two principal roots:
+This repo is intentionally small and readable: Angular on the front, Express + Socket.IO + MongoDB on the back. Nothing exotic—just the pieces needed for a real‑time group chat.
+
+Monorepo layout:
 
 ```
 root/
@@ -15,7 +17,7 @@ root/
   README.md          # Project documentation
 ```
 
-Key backend folders:
+Key backend folders (jump here first if you’re debugging server behavior):
 - `server/server.js` – bootstrap (Express app + sockets init)
 - `server/sockets.js` – Socket.IO real‑time event handling
 - `server/routes/` – REST API modular routers (`auth`, `users`, `groups`, `requests`, `messages`, `uploads`)
@@ -23,7 +25,7 @@ Key backend folders:
 - `server/db/` – Mongo connection + seeding helpers
 - `server/utils/` – cross-cutting utilities (logger, access checks, async handler, ids, etc.)
 
-Frontend structure (selected):
+Frontend structure (primary touch points):
 - `client/src/app/app.ts` – root component / route config
 - `client/src/app/chat/` – chat UI (message list, input, channel selection)
 - `client/src/app/dashboard/` – user/group management & admin flows
@@ -33,17 +35,17 @@ Frontend structure (selected):
 - `client/src/app/socket.service.ts` – real-time client wrapper
 - `client/src/app/api.service.ts` – REST abstraction
 
-### Git usage
-- Feature branches (e.g. `feature/Chat-Enhancements`, `QOL/CodeRefractor`) isolate changes.
-- Small commits with messages describing intent + rationale.
-- Periodic refactors (naming consistency, utilities, test DRYing) merged via feature branch PR.
-- Cypress E2E added early to guard regression, expanded iteratively (login → CRUD → chat real‑time → pagination → attachments → join requests → multi-user).
+### Git usage (lightweight rules)
+- One feature / fix per branch (e.g. `feature/chat-pagination`).
+- Commit small and explain the “why”.
+- Refactors are welcome—keep them separate from functional changes.
+- E2E tests arrive with (or immediately after) the feature so regressions surface fast.
 
 ## 2. Data Structures (Server & Client Shapes)
 
-This section details the core persisted and in‑memory structures. All MongoDB documents are served without the internal `_id`; a stable `id` is used for client correlation.
+Think of the backend as five lean collections plus two small in‑memory maps. We strip Mongo’s `_id` before returning data and always expose a friendly `id` field instead.
 
-### 2.1 Summary Table
+### 2.1 Snapshot Overview
 
 | Entity | Stored Fields | Notes | Source of Truth |
 |--------|---------------|-------|-----------------|
@@ -55,7 +57,7 @@ This section details the core persisted and in‑memory structures. All MongoDB 
 | Presence (ephemeral) | roomId → { username → sockets:Set } | Not persisted; recalculated on restart. | In-memory Map |
 | Typing (ephemeral) | roomId → { username → lastActivityTs } | Entries pruned after timeout. | In-memory Map |
 
-### 2.2 Conceptual TypeScript Interfaces
+### 2.2 Shapes (TypeScript feel – these aren’t enforced everywhere yet)
 ```ts
 interface User { id:string; username:string; email?:string; password?:string; roles:string[]; groups:string[]; avatarUrl?:string }
 interface Channel { id:string; name:string }
@@ -65,7 +67,7 @@ interface Attachment { type:'image'; url:string }
 interface Message { id:string; groupId:string; channelId:string; username:string; text?:string; ts:number; avatarUrl?:string; attachments?:Attachment[] }
 ```
 
-### 2.3 MongoDB Collections (Detailed Examples)
+### 2.3 Examples
 
 1. User
 ```jsonc
@@ -73,7 +75,7 @@ interface Message { id:string; groupId:string; channelId:string; username:string
   "id": "u1",
   "username": "super",
   "email": "super@example.com",
-  "password": "123",          // NOTE: plain in current phase (see Security section)
+  "password": "123",          // NOTE: plain in current phase 
   "roles": ["Super Admin"],
   "groups": ["gAb12..."]       // group ids membership list
 }
@@ -123,12 +125,12 @@ interface Message { id:string; groupId:string; channelId:string; username:string
 }
 ```
 
-### 2.4 In‑Memory (Ephemeral) Structures
+### 2.4 Ephemeral Stuff
 - Presence: `Map<roomId, Map<usernameLower, { username, sockets:Set<socketId> }>>`
 - Typing: `Map<roomId, Map<username, lastTypingActivityTs>>` (stale entries auto-pruned)
 
 ### 2.5 Client Mirrors
-Angular uses lightweight object literals matching these shapes (no dedicated model classes required at this phase). Data arrives via `ApiService` (REST) and `SocketService` (real-time) and lives in component state.
+The Angular side just mirrors these JSON shapes directly—no NgRx, no heavyweight models. Simpler = faster iteration right now.
 
 ## 3. Responsibility Split: Client vs Server
 
@@ -145,7 +147,7 @@ Angular uses lightweight object literals matching these shapes (no dedicated mod
 
 ## 4. REST API Routes
 
-Base: `http://localhost:3000/api`
+Base URL: `http://localhost:3000/api`. Everything here returns JSON. Mutations generally expect a `requester` so the server—not the UI—enforces permissions.
 
 ### 4.1 Tabular Reference
 
@@ -178,13 +180,13 @@ Base: `http://localhost:3000/api`
 | GET | /ping | – | pong | Liveness check |
 
 ### 4.2 Notes
-- Standard HTTP codes: 200/201 success; 400 invalid input; 401/403 auth/permission; 404 not found; 409 conflict.
-- Pagination for messages uses `limit` (default server-side) and `beforeTs` for backward paging.
-- `requester` field is required on mutating endpoints for authorization validation.
+- Conventional HTTP codes: 200/201 good, 400 bad data, 401/403 blocked, 404 not found, 409 conflict.
+- History pagination: pass `beforeTs` to walk backward; server returns `hasMore`.
+- Include `requester` on writes so role checks are authoritative.
 
 ## 5. Real-Time Socket.IO Events
 
-Room naming convention: `roomId = <groupId>:<channelId>` ensures isolation per channel.
+Socket.IO layers in the “live” bits. Room key = `groupId:channelId`.
 
 ### 5.1 Event Reference
 
@@ -201,11 +203,11 @@ Room naming convention: `roomId = <groupId>:<channelId>` ensures isolation per c
 | S → C | chat:roster | { roster } | – | Membership roster w/ avatar URLs |
 
 ### 5.2 System Messages
-Server generates and persists join/leave events as messages with `username = "system"`, allowing consistent rendering & pagination.
+Join/leave events are stored as ordinary messages (`username: system`) so the UI treats everything uniformly.
 
-### 5.3 Reliability Considerations
-- Client re-fetches history via REST on reconnect if needed; socket join ack also supplies history slice.
-- Presence & typing are ephemeral; stale typing entries are auto-pruned server-side.
+### 5.3 Reliability Notes
+- Reconnect → re‑join → get history slice; REST can still page older.
+- Presence/typing are transient by design—fine to lose on restart.
 
 ## 6. Angular Architecture
 
@@ -221,11 +223,11 @@ Server generates and persists join/leave events as messages with `username = "sy
 | Styles | Global + feature SCSS | Consistent styling & theming | `styles.scss`, `app.scss` |
 
 ### 6.2 Component Roles
-- App: Shell layout + router outlet.
-- Login: Auth form → ApiService.login → AuthService persist.
-- Dashboard: User/group/channel CRUD + join request moderation; role-gated UI actions.
-- Chat: Room join, message stream, pagination (history REST), presence & typing indicators, attachments.
-- Profile: User attribute edits + avatar upload.
+- App: Shell + router.
+- Login: Obtain credentials; store session.
+- Dashboard: Manage users, groups, channels, join approvals.
+- Chat: Join rooms, stream messages, paginate older ones, show presence/typing.
+- Profile: Edit user info & avatar.
 
 ### 6.3 Services Interaction Diagram
 ```
@@ -235,13 +237,13 @@ AuthService  -> localStorage (auth_user)
 ```
 
 ### 6.4 State Handling
-- Stateless global store; components own ephemeral state.
-- Chat maintains per-room message arrays; `beforeTs` used for historical pagination.
-- SocketService (conceptually) exposes Observables/Subjects for messages, presence, typing (implementation may be incremental).
+- No global store overhead for now.
+- Chat keeps per‑room message lists; prepend old pages.
+- SocketService provides (or will provide) reactive streams.
 
 ### 6.5 Styling & Testing Aids
-- SCSS modular approach; shared tokens in `app.scss`.
-- `data-cy` selectors on interactive elements guarantee stable E2E targeting.
+- Feature SCSS + shared tokens.
+- `data-cy` attributes = stable Cypress selectors.
 
 ## 7. Client ↔ Server Interaction Flows
 
@@ -261,21 +263,21 @@ AuthService  -> localStorage (auth_user)
 | Leave Channel / Disconnect | Socket `chat:leave` / disconnect | Presence removal, system leave message | Remove from presence list & show system message |
 
 ### 7.1 REST & Socket Interoperation
-- REST establishes authenticated context, CRUD operations, history pagination, and file/asset handling.
-- Sockets deliver high-frequency, state-delta events: messages, presence, typing, roster changes.
-- On channel switch: (1) ensure group/channel lists via REST, (2) issue `chat:join` to populate recent history + roster instantly, (3) request older messages via REST if user scrolls up.
+- REST: durable, queryable stuff (auth, CRUD, uploads, history pages).
+- Sockets: high-frequency deltas (messages, presence, typing).
+- Channel switch recipe: refresh lists (REST) → `chat:join` (history + roster) → lazy load older as needed.
 
-### 7.2 Trace Example (Send Message)
-1. User presses send in Chat component.
-2. `SocketService` emits `chat:message` with trimmed text.
-3. Server validates membership + content, persists message with generated id & timestamp.
-4. Server broadcasts `chat:message` to room (including sender).
-5. Chat component appends message; if user is viewing older history, future enhancement could mark unread.
+### 7.2 Trace: Sending a Message
+1. User hits send.
+2. Client emits `chat:message`.
+3. Server validates + saves + stamps id.
+4. Broadcast hits everyone (sender included).
+5. UI appends; future improvement could badge unread if scrolled up.
 
 ## 8. Testing Strategy
 
 ### End-to-End (Cypress)
-Specs cover:
+Covered scenarios:
 - Authentication & guard redirects
 - User management (create, role change, delete guard conditions)
 - Group + channel creation
@@ -286,16 +288,16 @@ Specs cover:
 - Real-time multi-user bidirectional exchange (extended with typing & ordering)
 - Join request workflow (request → approve → membership)
 
-Custom Cypress Commands:
+Custom commands (selection):
 - `apiLogin`, `ensureUser`, `ensureGroupWithChannel`
 - Join request helpers: `requestJoin`, `listJoinRequests`, `approveJoinRequest`
 - UI helpers: `selectGroupChannel`, `sendChatMessage`
 - Cleanup helpers: `cleanupTestData`, `deleteUser`, `deleteGroup`
 
-Global `afterEach` runs `cleanupTestData` (prefix-based) to keep DB lean.
+`afterEach` cleanup keeps runs isolated.
 
 ### Unit / Service (Planned)
-- Future additions: isolate SocketService, ApiService with mocked HTTP / socket layers.
+Next: targeted unit tests around ApiService & SocketService with mocks.
 
 ## 9. Configuration & Environment
 
@@ -332,30 +334,12 @@ Or open interactive runner:
 npx cypress open
 ```
 
-## 11. Security & Future Hardening
-
-| Area | Current | Planned Improvement |
-|------|---------|--------------------|
-| Passwords | Plain text (development seed) | Bcrypt hashing + migration (in progress design) |
-| Auth Tokens | None (session stored user) | JWT or session cookie + CSRF protection |
-| Rate Limiting | Not enforced | Add express-rate-limit on auth & mutation endpoints |
-| Input Validation | Manual field checks | Central schema validation (Zod / Joi) |
-| File Uploads | MIME filter + size limit | Virus scan / content-type revalidation |
-| Logging | Console with leveled logger | Structured & external sink (e.g. pino + ELK) |
-
-## 12. Notes on Server Internal Mutations
-
-Global (module) mutable references:
-- Presence & typing maps grow and shrink on join/leave and typing expiry.
-- Roster builds are stateless; enrichment queries user collection for avatar.
-- System messages share same persistence path as user messages for uniform history.
-
-## 13. Glossary
+## 11. Glossary
 - **Roster**: List of group members + derived status (active / online / offline).
 - **Room**: Composite of group + channel forming a logical Socket.IO room.
 - **System Message**: Server-originated message describing joins/leaves.
 
-## 14. Quick Development Checklist
+## 12. Quick Development Checklist
 - [x] Core CRUD (users, groups, channels)
 - [x] Join requests (approval workflow)
 - [x] Real-time messaging (Socket.IO)
