@@ -6,6 +6,8 @@ import { FormsModule } from '@angular/forms';
 import { Api } from '../api.service';
 import { Auth } from '../auth.service';
 import { SocketService, ChatMessage } from '../socket.service';
+import { absoluteUrl } from '../config';
+import { HISTORY_PAGE_SIZE, SCROLL_BOTTOM_THRESHOLD_PX, TYPING_INACTIVITY_MS, FALLBACK_AVATAR_COLORS } from '../constants';
 
 @Component({
   selector: 'app-chat',
@@ -202,7 +204,7 @@ export class Chat implements OnInit, AfterViewInit {
         this.deferScrollToBottom();
         // After initial load we cannot know if more exist; defer until user presses load older
         // Basic heuristic: if we received fewer than 50 messages, assume no more
-        this.hasMore = this.messages.length >= 50; // 50 is the server default
+  this.hasMore = this.messages.length >= HISTORY_PAGE_SIZE; // page size heuristic
       }
       const ackAny: any = ack;
       if (Array.isArray(ackAny.roster)) {
@@ -268,7 +270,7 @@ export class Chat implements OnInit, AfterViewInit {
     const prevScrollEl = this.scrollContainer?.nativeElement;
     const prevHeight = prevScrollEl ? prevScrollEl.scrollHeight : 0;
     const username = this.username();
-    this.api.getMessages(this.selectedGroupId, this.selectedChannelId, { user: username, limit: 50, beforeTs }).subscribe({
+  this.api.getMessages(this.selectedGroupId, this.selectedChannelId, { user: username, limit: HISTORY_PAGE_SIZE, beforeTs }).subscribe({
       next: (res) => {
   const incoming = (res.messages || []).filter(m => !this.messages.some(ex => ex.id === m.id));
         // Prepend older messages
@@ -340,7 +342,7 @@ export class Chat implements OnInit, AfterViewInit {
     }
     if (this.typingTimer) clearTimeout(this.typingTimer);
     // Inactivity threshold to stop typing
-    this.typingTimer = setTimeout(() => this.stopTyping(), 2000);
+  this.typingTimer = setTimeout(() => this.stopTyping(), TYPING_INACTIVITY_MS);
   }
 
   private stopTyping() {
@@ -383,8 +385,8 @@ export class Chat implements OnInit, AfterViewInit {
 
   private absUrl(url?: string) {
     if (!url) return undefined;
-    if (/^https?:\/\//i.test(url)) return url; // already absolute
-    return `http://localhost:3000${url}`; // could externalize base
+  if (/^https?:\/\//i.test(url)) return url; // already absolute
+  return absoluteUrl(url);
   }
 
   private buildMessage(raw: any) {
@@ -396,10 +398,36 @@ export class Chat implements OnInit, AfterViewInit {
     return { id: raw.id, username: raw.username, text: raw.text, ts: raw.ts, attachments: atts, avatarUrl: avatar };
   }
 
+  // Placeholder avatar helpers
+  initial(name: string) {
+    if (!name) return '?';
+    const trimmed = name.trim();
+    if (!trimmed) return '?';
+    return trimmed.charAt(0).toUpperCase();
+  }
+
+  private colorCache = new Map<string,string>();
+  private palette = [
+    '#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#0EA5E9', '#14B8A6',
+    '#F43F5E', '#6D28D9', '#DD6B20', '#059669', '#2563EB'
+  ];
+  colorFor(name: string) {
+    if (!name) return '#888';
+    const key = name.toLowerCase();
+    const existing = this.colorCache.get(key);
+    if (existing) return existing;
+    // Simple DJB2 hash
+    let h = 5381;
+    for (let i=0;i<key.length;i++) h = ((h << 5) + h) + key.charCodeAt(i);
+    const color = this.palette[Math.abs(h) % this.palette.length];
+    this.colorCache.set(key, color);
+    return color;
+  }
+
   onScroll() {
     const el = this.scrollContainer?.nativeElement;
     if (!el) return;
-    const threshold = 56; // px tolerance from bottom
+  const threshold = SCROLL_BOTTOM_THRESHOLD_PX; // px tolerance from bottom
     const distanceFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
     this.atBottom = distanceFromBottom <= threshold;
   }

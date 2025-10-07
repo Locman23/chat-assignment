@@ -55,7 +55,14 @@
         </li>
         <li *ngFor="let m of messages" class="message" [class.system]="m.username === 'system'">
           <ng-container *ngIf="m.username !== 'system'; else systemMsg">
-            <span class="avatar-wrap" *ngIf="m.avatarUrl"><img [src]="m.avatarUrl" class="avatar-circle" alt="avatar" /></span>
+            <span class="avatar-wrap">
+              <ng-container *ngIf="m.avatarUrl; else messageFallback">
+                <img [src]="m.avatarUrl" class="avatar-circle" [alt]="m.username + ' avatar'" />
+              </ng-container>
+              <ng-template #messageFallback>
+                <span class="avatar-circle avatar-fallback" [style.background-color]="colorFor(m.username)">{{ initial(m.username) }}</span>
+              </ng-template>
+            </span>
             <span class="author">{{ m.username }}</span>
             <span class="text">
               <span>{{ m.text }}</span>
@@ -98,7 +105,14 @@
     <ul class="roster-list">
       <li *ngFor="let u of roster" class="roster-item" [class.active]="u.status==='active'" [class.online]="u.status==='online'" [class.offline]="u.status==='offline'">
         <span class="status-dot" [attr.data-status]="u.status"></span>
-        <span class="roster-avatar" *ngIf="u.avatarUrl"><img [src]="u.avatarUrl" alt="avatar" class="avatar-circle" /></span>
+        <span class="roster-avatar">
+          <ng-container *ngIf="u.avatarUrl; else rosterFallback">
+            <img [src]="u.avatarUrl" [alt]="u.username + ' avatar'" class="avatar-circle" />
+          </ng-container>
+          <ng-template #rosterFallback>
+            <span class="avatar-circle avatar-fallback small" [style.background-color]="colorFor(u.username)">{{ initial(u.username) }}</span>
+          </ng-template>
+        </span>
         <span class="name">{{ u.username }}</span>
       </li>
     </ul>

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
 import { Observable, Subject } from 'rxjs';
+import { SOCKET_BASE } from './config';
 
 export interface ChatMessage {
   id: string;
@@ -21,7 +22,7 @@ export class SocketService {
   private typing$ = new Subject<string[]>();
   private roster$ = new Subject<Array<{ username: string; status: string }>>();
 
-  connect(url = 'http://localhost:3000') {
+  connect(url = SOCKET_BASE) {
     if (this.socket) return;
   this.socket = io(url, { autoConnect: true });
     this.socket.on('connect', () => {

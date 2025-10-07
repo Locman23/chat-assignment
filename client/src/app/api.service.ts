@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { API_BASE } from './config';
 
 @Injectable({ providedIn: 'root' })
 export class Api {
-  base = 'http://localhost:3000/api';
+  base = API_BASE;
   constructor(private http: HttpClient) {}
 
   login(payload: { username: string; password: string }) {

@@ -82,6 +82,8 @@
 .message { padding: 6px 0; display: flex; gap: 8px; align-items: center; }
 .message .avatar-wrap { display:flex; align-items:center; }
 .avatar-circle { width:32px; height:32px; border-radius:50%; object-fit:cover; border:1px solid #ddd; }
+.avatar-fallback { display:inline-flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; color:#fff; letter-spacing:0.5px; user-select:none; }
+.avatar-fallback.small { width:24px; height:24px; font-size:12px; }
 .message .author { font-weight: 600; }
 .message .text { flex: 1; }
 .attachments { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px; }

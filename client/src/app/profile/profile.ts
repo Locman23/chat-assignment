@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 
 import { Api } from '../api.service';
 import { Auth, User } from '../auth.service';
+import { absoluteUrl } from '../config';
 
 @Component({
   selector: 'app-profile',
@@ -28,7 +29,7 @@ export class Profile implements OnInit {
     if ((u.username || '').toLowerCase() === 'super') { this.router.navigate(['/dashboard']); return; }
     this.form.username = u.username || '';
     this.form.email = u.email || '';
-    if (u.avatarUrl) this.avatarPreview = this.makeAbsolute(u.avatarUrl);
+  if (u.avatarUrl) this.avatarPreview = absoluteUrl(u.avatarUrl);
   }
 
   save() {
@@ -68,7 +69,7 @@ export class Profile implements OnInit {
       if (res?.ok) {
         const updated = res.user as User;
   this.auth.login(updated);
-  this.avatarPreview = res.avatarUrl ? this.makeAbsolute(res.avatarUrl) : this.makeAbsolute(updated.avatarUrl || '');
+  this.avatarPreview = res.avatarUrl ? absoluteUrl(res.avatarUrl) : absoluteUrl(updated.avatarUrl || '');
         this.success = 'Avatar updated';
       } else {
         this.error = 'Upload failed';
@@ -81,9 +82,5 @@ export class Profile implements OnInit {
     }
   }
 
-  private makeAbsolute(url: string) {
-    if (!url) return url;
-    if (/^https?:\/\//i.test(url)) return url;
-    return `http://localhost:3000${url}`;
-  }
+  // Removed makeAbsolute in favor of shared absoluteUrl()
 }

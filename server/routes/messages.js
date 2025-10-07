@@ -10,7 +10,8 @@ router.get('/:groupId/:channelId', asyncHandler(async (req, res) => {
   const { user: username, limit, beforeTs } = req.query || {};
   if (!username) return res.status(400).json({ error: 'user query param required' });
   if (!(await canAccessGroup(username, groupId))) return res.status(403).json({ error: 'not authorized' });
-  const limRequested = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+  const { MAX_HISTORY_LIMIT, DEFAULT_HISTORY_LIMIT } = require('../constants');
+  const limRequested = Math.min(MAX_HISTORY_LIMIT, Math.max(1, parseInt(limit, 10) || DEFAULT_HISTORY_LIMIT));
   const effectiveBefore = beforeTs ? Number(beforeTs) : undefined;
   const { getDb } = require('../db/mongo');
   const messagesCol = getDb().collection('messages');

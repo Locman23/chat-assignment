@@ -26,7 +26,8 @@ function fileFilter(_req, file, cb){
   cb(null, true);
 }
 
-const upload = multer({ storage, fileFilter, limits: { fileSize: 2 * 1024 * 1024 } }); // 2MB limit
+const { UPLOAD_MAX_FILE_SIZE_BYTES } = require('../constants');
+const upload = multer({ storage, fileFilter, limits: { fileSize: UPLOAD_MAX_FILE_SIZE_BYTES } }); // 2MB limit
 
 const router = express.Router();
 
@@ -39,7 +40,8 @@ router.post('/avatar', upload.single('avatar'), asyncHandler(async (req, res) =>
   const user = await users.findOne({ username: { $regex: `^${normalize(requester)}$`, $options: 'i' } });
   if (!user) return res.status(404).json({ error: 'user not found' });
   const relative = `/uploads/${req.file.filename}`;
-  const base = process.env.PUBLIC_BASE || 'http://localhost:3000';
+  const { publicBase } = require('../utils/base');
+  const base = publicBase();
   const absolute = `${base}${relative}`;
   await users.updateOne({ id: user.id }, { $set: { avatarUrl: relative } }); // store relative in DB
   const updated = await users.findOne({ id: user.id }, { projection: { _id: 0 } });
@@ -54,7 +56,8 @@ router.post('/message-image', upload.single('image'), asyncHandler(async (req, r
   if (!(await canAccessGroup(username, groupId))) return res.status(403).json({ error: 'not authorized' });
   if (!req.file) return res.status(400).json({ error: 'file required' });
   const relative = `/uploads/${req.file.filename}`;
-  const base = process.env.PUBLIC_BASE || 'http://localhost:3000';
+  const { publicBase } = require('../utils/base');
+  const base = publicBase();
   res.json({ ok: true, url: `${base}${relative}` });
 }));
 

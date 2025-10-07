@@ -80,8 +80,9 @@ function initSockets(httpServer) {
         socket.data = { username, groupId, channelId, room: rid };
         socket.join(rid);
   logger.debug('join success', { sid: socket.id, username, groupId, channelId, rid });
-        // Load recent history (default 50)
-        const recent = await history(groupId, channelId, { limit: 50 });
+  // Load recent history using configured default limit
+  const { DEFAULT_HISTORY_LIMIT } = require('./constants');
+  const recent = await history(groupId, channelId, { limit: DEFAULT_HISTORY_LIMIT });
         // Build enriched roster with avatars for immediate display
         let enrichedRoster = [];
         try {
@@ -158,8 +159,8 @@ function initSockets(httpServer) {
         const { users } = getCollections();
         const uDoc = await users.findOne({ username: { $regex: `^${normalize(username)}$`, $options: 'i' } }, { projection: { avatarUrl: 1 } });
         if (uDoc?.avatarUrl) {
-          const base = process.env.PUBLIC_BASE || 'http://localhost:3000';
-          // For emission use absolute, for persistence convert to relative below
+          const { publicBase } = require('./utils/base');
+          const base = publicBase();
           msg.avatarUrl = `${base}${uDoc.avatarUrl}`;
         }
       } catch (e) {
@@ -177,7 +178,8 @@ function initSockets(httpServer) {
       if (!msg.attachments.length) delete msg.attachments; // keep schema clean when none
       try {
         // Build persistence clone with relative URLs only
-        const base = process.env.PUBLIC_BASE || 'http://localhost:3000';
+  const { publicBase } = require('./utils/base');
+  const base = publicBase();
         const persistMsg = { ...msg };
         // Normalize avatarUrl to relative
         if (persistMsg.avatarUrl && persistMsg.avatarUrl.startsWith(base)) {
@@ -264,7 +266,8 @@ async function broadcastRoster(io, room, group) {
     } catch (e) {
       logger.warn('roster avatar enrichment failed', e);
     }
-  const base = process.env.PUBLIC_BASE || 'http://localhost:3000';
+  const { publicBase } = require('./utils/base');
+  const base = publicBase();
   const withAbs = enriched.map(r => ({ ...r, avatarUrl: r.avatarUrl ? `${base}${r.avatarUrl}` : undefined }));
   logger.debug('roster broadcast', { room, members: (group.members||[]).length });
   io.to(room).emit('chat:roster', { roster: withAbs });
@@ -284,7 +287,8 @@ async function buildRosterWithAvatars(group, room) {
     if (names.length) {
       const userDocs = await users.find({ username: { $in: names } }).project({ username: 1, avatarUrl: 1, _id: 0 }).toArray();
       const map = new Map(userDocs.map(u => [String(u.username).toLowerCase(), u.avatarUrl]));
-      const base = process.env.PUBLIC_BASE || 'http://localhost:3000';
+  const { publicBase } = require('./utils/base');
+  const base = publicBase();
       return baseRoster.map(r => {
         const rel = map.get(r.username.toLowerCase());
         return { ...r, avatarUrl: rel ? `${base}${rel}` : undefined };
