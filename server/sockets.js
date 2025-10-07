@@ -80,9 +80,16 @@ function initSockets(httpServer) {
         socket.data = { username, groupId, channelId, room: rid };
         socket.join(rid);
   logger.debug('join success', { sid: socket.id, username, groupId, channelId, rid });
-        // Load recent history (default 50) and include in ack
+        // Load recent history (default 50)
         const recent = await history(groupId, channelId, { limit: 50 });
-        ack && ack({ ok: true, history: recent });
+        // Build enriched roster with avatars for immediate display
+        let enrichedRoster = [];
+        try {
+          enrichedRoster = await buildRosterWithAvatars(g, rid);
+        } catch (e) {
+          logger.warn('join roster enrichment failed', e);
+        }
+        ack && ack({ ok: true, history: recent, roster: enrichedRoster });
         // Broadcast system join (async, after ack so client can render history first)
         emitSystem(io, rid, { groupId, channelId }, `${username} joined the channel`).catch(()=>{});
         // Presence update
@@ -131,7 +138,7 @@ function initSockets(httpServer) {
     });
 
     // Client sends { text }
-    socket.on('chat:message', async ({ text }, ack) => {
+    socket.on('chat:message', async ({ text, imageUrl, attachments }, ack) => {
       const { username, groupId, channelId, room } = socket.data || {};
       if (!room || !groupId || !channelId) return ack && ack({ ok: false, error: 'not in a room' });
       const g = await getGroupById(groupId);
@@ -142,10 +149,50 @@ function initSockets(httpServer) {
         groupId,
         channelId,
         text: String(text || ''),
-        ts: Date.now()
+        ts: Date.now(),
+        attachments: []
       };
+      // Fetch avatarUrl for sender (if any)
       try {
-        await saveMessage(msg);
+        const { getCollections } = require('./db/mongo');
+        const { users } = getCollections();
+        const uDoc = await users.findOne({ username: { $regex: `^${normalize(username)}$`, $options: 'i' } }, { projection: { avatarUrl: 1 } });
+        if (uDoc?.avatarUrl) {
+          const base = process.env.PUBLIC_BASE || 'http://localhost:3000';
+          // For emission use absolute, for persistence convert to relative below
+          msg.avatarUrl = `${base}${uDoc.avatarUrl}`;
+        }
+      } catch (e) {
+        logger.warn('attach avatar to message failed', e);
+      }
+      // Support either single imageUrl or array attachments passed explicitly
+      if (imageUrl) {
+        msg.attachments.push({ type: 'image', url: String(imageUrl) }); // may be absolute from upload endpoint
+      }
+      if (Array.isArray(attachments)) {
+        for (const a of attachments) {
+          if (a && a.type === 'image' && a.url) msg.attachments.push({ type: 'image', url: String(a.url) });
+        }
+      }
+      if (!msg.attachments.length) delete msg.attachments; // keep schema clean when none
+      try {
+        // Build persistence clone with relative URLs only
+        const base = process.env.PUBLIC_BASE || 'http://localhost:3000';
+        const persistMsg = { ...msg };
+        // Normalize avatarUrl to relative
+        if (persistMsg.avatarUrl && persistMsg.avatarUrl.startsWith(base)) {
+          persistMsg.avatarUrl = persistMsg.avatarUrl.slice(base.length);
+        }
+        // Normalize attachment URLs to relative if they were returned absolute
+        if (Array.isArray(persistMsg.attachments)) {
+          persistMsg.attachments = persistMsg.attachments.map(a => {
+            if (a.url && a.url.startsWith(base)) {
+              return { ...a, url: a.url.slice(base.length) };
+            }
+            return a;
+          });
+        }
+        await saveMessage(persistMsg);
         io.to(room).emit('chat:message', msg);
         logger.debug('message', { room, username, len: msg.text.length });
         ack && ack({ ok: true, message: msg });
@@ -174,8 +221,22 @@ function initSockets(httpServer) {
       if (!groupId || !room) return ack && ack({ ok: false });
       const g = await getGroupById(groupId);
       if (!g) return ack && ack({ ok: false });
-      const roster = buildRoster(g.members || [], room);
-      ack && ack({ ok: true, roster });
+      let roster = buildRoster(g.members || [], room);
+      try {
+        const { getCollections } = require('./db/mongo');
+        const { users } = getCollections();
+        const names = (g.members || []).map(u => u).filter(Boolean);
+        if (names.length) {
+          const userDocs = await users.find({ username: { $in: names } }).project({ username: 1, avatarUrl: 1, _id: 0 }).toArray();
+          const map = new Map(userDocs.map(u => [String(u.username).toLowerCase(), u.avatarUrl]));
+          roster = roster.map(r => ({ ...r, avatarUrl: map.get(r.username.toLowerCase()) }));
+        }
+      } catch (e) {
+        logger.warn('roster request avatar enrichment failed', e);
+      }
+      const base = process.env.PUBLIC_BASE || 'http://localhost:3000';
+      const withAbs = roster.map(r => ({ ...r, avatarUrl: r.avatarUrl ? `${base}${r.avatarUrl}` : undefined }));
+      ack && ack({ ok: true, roster: withAbs });
     });
   });
 
@@ -188,12 +249,51 @@ function initSockets(httpServer) {
 async function broadcastRoster(io, room, group) {
   try {
     if (!group) return;
-    const roster = buildRoster(group.members || [], room);
-    logger.debug('roster broadcast', { room, members: (group.members||[]).length, roster });
-    io.to(room).emit('chat:roster', { roster });
+    const rosterBase = buildRoster(group.members || [], room);
+    // Enrich with avatarUrl (relative) from users collection
+    let enriched = rosterBase;
+    try {
+      const { getCollections } = require('./db/mongo');
+      const { users } = getCollections();
+      const names = (group.members || []).map(u => u).filter(Boolean);
+      if (names.length) {
+        const userDocs = await users.find({ username: { $in: names } }).project({ username: 1, avatarUrl: 1, _id: 0 }).toArray();
+        const map = new Map(userDocs.map(u => [String(u.username).toLowerCase(), u.avatarUrl]));
+        enriched = rosterBase.map(r => ({ ...r, avatarUrl: map.get(r.username.toLowerCase()) }));
+      }
+    } catch (e) {
+      logger.warn('roster avatar enrichment failed', e);
+    }
+  const base = process.env.PUBLIC_BASE || 'http://localhost:3000';
+  const withAbs = enriched.map(r => ({ ...r, avatarUrl: r.avatarUrl ? `${base}${r.avatarUrl}` : undefined }));
+  logger.debug('roster broadcast', { room, members: (group.members||[]).length });
+  io.to(room).emit('chat:roster', { roster: withAbs });
   } catch (e) {
     logger.error('roster broadcast failed', e);
   }
+}
+
+// Build roster entries with absolute avatar URLs
+async function buildRosterWithAvatars(group, room) {
+  if (!group) return [];
+  const baseRoster = buildRoster(group.members || [], room);
+  try {
+    const { getCollections } = require('./db/mongo');
+    const { users } = getCollections();
+    const names = (group.members || []).map(u => u).filter(Boolean);
+    if (names.length) {
+      const userDocs = await users.find({ username: { $in: names } }).project({ username: 1, avatarUrl: 1, _id: 0 }).toArray();
+      const map = new Map(userDocs.map(u => [String(u.username).toLowerCase(), u.avatarUrl]));
+      const base = process.env.PUBLIC_BASE || 'http://localhost:3000';
+      return baseRoster.map(r => {
+        const rel = map.get(r.username.toLowerCase());
+        return { ...r, avatarUrl: rel ? `${base}${rel}` : undefined };
+      });
+    }
+  } catch (e) {
+    logger.warn('buildRosterWithAvatars failed', e);
+  }
+  return baseRoster;
 }
 
 module.exports = { initSockets };

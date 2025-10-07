@@ -2,6 +2,18 @@
   <h2>Profile</h2>
   <p class="muted">Update your username, email and password. Leave the password blank to keep the current one.</p>
 
+  <div class="avatar-section" *ngIf="auth.user() as u">
+    <div class="avatar-preview">
+      <img *ngIf="(avatarPreview || u.avatarUrl) as src" [src]="src" alt="avatar" class="avatar-img" />
+      <div *ngIf="!(avatarPreview || u.avatarUrl)" class="avatar-placeholder">No avatar</div>
+    </div>
+    <label class="btn secondary" style="margin-top:8px;">
+      Change Avatar
+      <input type="file" accept="image/*" (change)="onAvatarChange($event)" hidden />
+    </label>
+    <div *ngIf="uploading" class="muted small">Uploading...</div>
+  </div>
+
   <form (ngSubmit)="save()" #f="ngForm" class="form-inline mt-2">
     <label class="sr-only">Username</label>
     <input class="input" name="username" [(ngModel)]="form.username" required placeholder="Username" />

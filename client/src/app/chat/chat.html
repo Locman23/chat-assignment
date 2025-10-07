@@ -55,8 +55,18 @@
         </li>
         <li *ngFor="let m of messages" class="message" [class.system]="m.username === 'system'">
           <ng-container *ngIf="m.username !== 'system'; else systemMsg">
+            <span class="avatar-wrap" *ngIf="m.avatarUrl"><img [src]="m.avatarUrl" class="avatar-circle" alt="avatar" /></span>
             <span class="author">{{ m.username }}</span>
-            <span class="text">{{ m.text }}</span>
+            <span class="text">
+              <span>{{ m.text }}</span>
+              <ng-container *ngIf="m.attachments && m.attachments.length">
+                <div class="attachments">
+                  <ng-container *ngFor="let a of m.attachments">
+                    <img *ngIf="a.type==='image'" [src]="a.url" class="attach-img" alt="image" />
+                  </ng-container>
+                </div>
+              </ng-container>
+            </span>
             <span class="time">{{ m.ts | date:'shortTime' }}</span>
           </ng-container>
           <ng-template #systemMsg>
@@ -69,6 +79,10 @@
 
     <form class="chat-input" (ngSubmit)="onSend()" *ngIf="selectedGroupId && selectedChannelId; else noChannelSelected">
       <input class="input" type="text" placeholder="Message" [(ngModel)]="messageText" name="message" [disabled]="!selectedGroupId || !selectedChannelId" (input)="onInputChange()" />
+      <label class="btn secondary file-btn">
+        📷
+        <input type="file" accept="image/*" (change)="onSelectImage($event)" hidden />
+      </label>
       <button class="btn" type="submit" [disabled]="!messageText">Send</button>
     </form>
     <ng-template #noChannelSelected>
@@ -84,6 +98,7 @@
     <ul class="roster-list">
       <li *ngFor="let u of roster" class="roster-item" [class.active]="u.status==='active'" [class.online]="u.status==='online'" [class.offline]="u.status==='offline'">
         <span class="status-dot" [attr.data-status]="u.status"></span>
+        <span class="roster-avatar" *ngIf="u.avatarUrl"><img [src]="u.avatarUrl" alt="avatar" class="avatar-circle" /></span>
         <span class="name">{{ u.username }}</span>
       </li>
     </ul>

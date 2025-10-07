@@ -96,6 +96,22 @@ export class Api {
     return this.http.put<{ user: any }>(`${this.base}/users/${userId}`, payload);
   }
 
+  uploadAvatar(file: File, requester: string) {
+    const fd = new FormData();
+    fd.append('avatar', file);
+    fd.append('requester', requester);
+    return this.http.post<{ ok: boolean; user: any; avatarUrl: string }>(`${this.base}/uploads/avatar`, fd);
+  }
+
+  uploadMessageImage(file: File, payload: { username: string; groupId: string; channelId: string }) {
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('username', payload.username);
+    fd.append('groupId', payload.groupId);
+    fd.append('channelId', payload.channelId);
+    return this.http.post<{ ok: boolean; url: string }>(`${this.base}/uploads/message-image`, fd);
+  }
+
   // Paginated message history (older messages): pass beforeTs to page backwards
   getMessages(groupId: string, channelId: string, opts: { user: string; limit?: number; beforeTs?: number }) {
     const params = new URLSearchParams();

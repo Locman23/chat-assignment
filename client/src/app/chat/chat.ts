@@ -20,13 +20,13 @@ export class Chat implements OnInit, AfterViewInit {
   selectedChannelId = '';
 
   // Placeholder messages until Socket.IO + API history is added
-  messages: Array<{ id: string; username: string; text: string; ts: number }> = [];
+  messages: Array<{ id: string; username: string; text: string; ts: number; attachments?: Array<{ type: string; url: string }>; avatarUrl?: string }> = [];
   messageText = '';
   statusMsg = '';
   errorMsg = '';
   presenceUsers: string[] = [];
   typingUsers: string[] = [];
-  roster: Array<{ username: string; status: string }> = [];
+  roster: Array<{ username: string; status: string; avatarUrl?: string }> = [];
   private typing = false;
   private typingTimer: any;
   @ViewChild('scrollContainer') private scrollContainer?: ElementRef<HTMLDivElement>;
@@ -34,6 +34,7 @@ export class Chat implements OnInit, AfterViewInit {
   private historyLoaded = false;
   hasMore = true; // assume there may be older messages until proven otherwise
   loadingOlder = false;
+  private rosterMap = new Map<string, string | undefined>();
 
   constructor(private api: Api, private auth: Auth, private sockets: SocketService) {}
 
@@ -43,7 +44,22 @@ export class Chat implements OnInit, AfterViewInit {
     this.sockets.messages().subscribe((m: ChatMessage) => {
       if (m.groupId === this.selectedGroupId && m.channelId === this.selectedChannelId) {
         const shouldScroll = this.atBottom; // capture before DOM changes
-        this.messages = [...this.messages, { id: m.id, username: m.username, text: m.text, ts: m.ts }];
+        const built = this.buildMessage(m);
+        this.messages = [...this.messages, built];
+        // If this message has an avatar and roster doesn't yet, update roster immediately
+        if (built.avatarUrl && built.username !== 'system') {
+          const key = built.username.toLowerCase();
+            const existing = this.rosterMap.get(key);
+            if (!existing) {
+              this.rosterMap.set(key, built.avatarUrl);
+              let changed = false;
+              this.roster = this.roster.map(u => {
+                if (u.username.toLowerCase() === key && !u.avatarUrl) { changed = true; return { ...u, avatarUrl: built.avatarUrl }; }
+                return u;
+              });
+              if (changed && shouldScroll) this.deferScrollToBottom();
+            }
+        }
         if (shouldScroll) this.deferScrollToBottom();
       }
     });
@@ -55,12 +71,32 @@ export class Chat implements OnInit, AfterViewInit {
       const me = this.username().toLowerCase();
       this.typingUsers = users.filter(u => u.toLowerCase() !== me);
     });
-    this.sockets.roster().subscribe(r => {
-      this.roster = r.slice().sort((a,b) => {
+    this.sockets.roster().subscribe((r: any[]) => {
+      // Preserve existing known avatars (messages or previous roster)
+      const previous = new Map(this.rosterMap);
+      for (const m of this.messages) if (m.avatarUrl) this.rosterMap.set(m.username.toLowerCase(), m.avatarUrl);
+      const transformed = r.map(u => {
+        const key = String(u.username).toLowerCase();
+        const incoming = this.absUrl(u.avatarUrl);
+        const existing = this.rosterMap.get(key) || previous.get(key);
+        const avatarUrl = incoming || existing;
+        if (avatarUrl) this.rosterMap.set(key, avatarUrl);
+        return { ...u, avatarUrl };
+      });
+      this.roster = transformed.sort((a:any,b:any) => {
         const order = (s: string) => s === 'active' ? 0 : s === 'online' ? 1 : 2;
         const diff = order(a.status) - order(b.status);
         return diff !== 0 ? diff : a.username.localeCompare(b.username);
       });
+      let changed = false;
+      this.messages = this.messages.map(m => {
+        if (!m.avatarUrl && m.username !== 'system') {
+          const av = this.rosterMap.get(m.username.toLowerCase());
+          if (av) { changed = true; return { ...m, avatarUrl: av }; }
+        }
+        return m;
+      });
+      if (changed && this.atBottom) this.deferScrollToBottom();
     });
     this.loadGroups();
   }
@@ -151,7 +187,7 @@ export class Chat implements OnInit, AfterViewInit {
   private async joinCurrent(username: string) {
     this.errorMsg = '';
     this.statusMsg = '';
-    const ack = await this.sockets.join(username, this.selectedGroupId, this.selectedChannelId);
+  const ack = await this.sockets.join(username, this.selectedGroupId, this.selectedChannelId);
     if (!ack?.ok) {
       this.errorMsg = ack?.error || 'Failed to join room';
     } else {
@@ -160,7 +196,7 @@ export class Chat implements OnInit, AfterViewInit {
       this.statusMsg = `Joined ${g?.name || this.selectedGroupId} / #${c?.name || this.selectedChannelId}`;
       if (Array.isArray(ack.history)) {
         // Replace messages array with persisted history
-        this.messages = ack.history.map(h => ({ id: h.id, username: h.username, text: h.text, ts: h.ts }));
+        this.messages = ack.history.map(h => this.buildMessage(h));
         this.historyLoaded = true;
         // Always scroll on initial history load for a room
         this.deferScrollToBottom();
@@ -168,21 +204,50 @@ export class Chat implements OnInit, AfterViewInit {
         // Basic heuristic: if we received fewer than 50 messages, assume no more
         this.hasMore = this.messages.length >= 50; // 50 is the server default
       }
-      // Request roster explicitly (in addition to push) as a safety net
-      this.sockets.requestRoster().then(ack => {
+      const ackAny: any = ack;
+      if (Array.isArray(ackAny.roster)) {
+        // Use server-provided enriched roster immediately
+        // DO NOT clear existing rosterMap so if a fast-follow roster push lacks avatar we retain avatars
+        this.roster = ackAny.roster.slice().map((x:any)=> {
+          const av = this.absUrl(x.avatarUrl);
+          if (av) this.rosterMap.set(String(x.username).toLowerCase(), av);
+          return { ...x, avatarUrl: av };
+        }).sort((a:any,b:any) => {
+          const order = (s: string) => s === 'active' ? 0 : s === 'online' ? 1 : 2;
+          const diff = order(a.status) - order(b.status);
+          return diff !== 0 ? diff : a.username.localeCompare(b.username);
+        });
+        // Enrich any history messages missing avatar now that roster is known
+        this.messages = this.messages.map(m => !m.avatarUrl && m.username !== 'system' ? { ...m, avatarUrl: this.rosterMap.get(m.username.toLowerCase()) } : m);
+      }
+      // Only request roster if server did not send one in join ack (saves an overwrite that could drop avatars)
+      if (!Array.isArray((ack as any).roster)) {
+        this.sockets.requestRoster().then(ack => {
         if (ack?.ok && Array.isArray(ack.roster)) {
           // eslint-disable-next-line no-console
           console.log('[chat] roster ack', ack.roster);
-          this.roster = ack.roster.slice().sort((a,b) => {
+          // Merge roster without removing known avatars
+          const merged = ack.roster.slice().map((x:any) => {
+            const key = String(x.username).toLowerCase();
+            const incoming = this.absUrl(x.avatarUrl);
+            const existing = this.rosterMap.get(key);
+            const avatarUrl = incoming || existing; // preserve existing if incoming missing
+            if (avatarUrl) this.rosterMap.set(key, avatarUrl);
+            return { ...x, avatarUrl };
+          }).sort((a:any,b:any) => {
             const order = (s: string) => s === 'active' ? 0 : s === 'online' ? 1 : 2;
             const diff = order(a.status) - order(b.status);
             return diff !== 0 ? diff : a.username.localeCompare(b.username);
           });
+          this.roster = merged;
+          // Enrich messages still missing avatars
+          this.messages = this.messages.map(m => !m.avatarUrl && m.username !== 'system' ? { ...m, avatarUrl: this.rosterMap.get(m.username.toLowerCase()) } : m);
         } else {
           // eslint-disable-next-line no-console
           console.warn('[chat] roster ack failed', ack);
         }
-      });
+        });
+      }
     }
   }
 
@@ -205,9 +270,10 @@ export class Chat implements OnInit, AfterViewInit {
     const username = this.username();
     this.api.getMessages(this.selectedGroupId, this.selectedChannelId, { user: username, limit: 50, beforeTs }).subscribe({
       next: (res) => {
-        const incoming = (res.messages || []).filter(m => !this.messages.some(ex => ex.id === m.id));
+  const incoming = (res.messages || []).filter(m => !this.messages.some(ex => ex.id === m.id));
         // Prepend older messages
-        this.messages = [...incoming.map(m => ({ id: m.id, username: m.username, text: m.text, ts: m.ts })), ...this.messages];
+        const mapped = incoming.map(m => this.buildMessage(m));
+        this.messages = [...mapped, ...this.messages];
         // Use server's hasMore directly (accurate via limit+1 strategy); if no new messages, hasMore false
         this.hasMore = !!res.hasMore;
         // Preserve scroll position after prepending
@@ -239,6 +305,32 @@ export class Chat implements OnInit, AfterViewInit {
     this.stopTyping();
     // If user just sent a message, keep them at bottom
     this.deferScrollToBottom();
+  }
+
+  async onSelectImage(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    if (!input.files || !input.files.length) return;
+    const file = input.files[0];
+    // Basic client-side validation
+    if (!file.type.startsWith('image/')) { this.errorMsg = 'Invalid image type'; return; }
+    const username = this.username();
+    if (!username) { this.errorMsg = 'Not authenticated'; return; }
+    try {
+      const res: any = await this.api.uploadMessageImage(file, { username, groupId: this.selectedGroupId, channelId: this.selectedChannelId }).toPromise();
+      if (res?.ok && res.url) {
+        // Send empty text if user hasn't typed anything, embed image attachment
+        const ack = await this.sockets.send(this.messageText.trim(), { imageUrl: res.url });
+        if (!ack?.ok) this.errorMsg = ack?.error || 'Failed to send image';
+        this.messageText = '';
+        this.stopTyping();
+      } else {
+        this.errorMsg = 'Upload failed';
+      }
+    } catch (e: any) {
+      this.errorMsg = e?.error?.error || 'Upload failed';
+    } finally {
+      input.value = '';
+    }
   }
 
   onInputChange() {
@@ -282,6 +374,26 @@ export class Chat implements OnInit, AfterViewInit {
     } catch {
       // ignore
     }
+  }
+
+  private withAbsolute(att?: Array<{ type: string; url: string }>) {
+    if (!att) return att;
+    return att.map(a => ({ ...a, url: this.absUrl(a.url) || a.url }));
+  }
+
+  private absUrl(url?: string) {
+    if (!url) return undefined;
+    if (/^https?:\/\//i.test(url)) return url; // already absolute
+    return `http://localhost:3000${url}`; // could externalize base
+  }
+
+  private buildMessage(raw: any) {
+    const atts = this.withAbsolute(raw.attachments);
+    let avatar = this.absUrl(raw.avatarUrl);
+    if (!avatar && raw.username && raw.username !== 'system') {
+      avatar = this.rosterMap.get(String(raw.username).toLowerCase());
+    }
+    return { id: raw.id, username: raw.username, text: raw.text, ts: raw.ts, attachments: atts, avatarUrl: avatar };
   }
 
   onScroll() {

@@ -9,6 +9,8 @@ export interface ChatMessage {
   channelId: string;
   text: string;
   ts: number;
+  attachments?: Array<{ type: string; url: string }>;
+  avatarUrl?: string; // relative or absolute
 }
 
 @Injectable({ providedIn: 'root' })
@@ -34,7 +36,7 @@ export class SocketService {
       // eslint-disable-next-line no-console
       console.error('[socket] error', err);
     });
-    this.socket.on('chat:message', (m: ChatMessage) => this.message$.next(m));
+  this.socket.on('chat:message', (m: ChatMessage) => this.message$.next(m));
     this.socket.on('chat:presence', (payload: { users: string[] }) => {
       this.presence$.next((payload?.users || []).slice());
     });
@@ -93,9 +95,12 @@ export class SocketService {
     });
   }
 
-  send(text: string): Promise<{ ok: boolean; error?: string; message?: ChatMessage }> {
+  send(text: string, opts?: { imageUrl?: string; attachments?: Array<{ type: string; url: string }> }): Promise<{ ok: boolean; error?: string; message?: ChatMessage }> {
     return new Promise((resolve) => {
-      this.socket?.emit('chat:message', { text }, (ack: any) => {
+      const payload: any = { text };
+      if (opts?.imageUrl) payload.imageUrl = opts.imageUrl;
+      if (opts?.attachments) payload.attachments = opts.attachments;
+      this.socket?.emit('chat:message', payload, (ack: any) => {
         // eslint-disable-next-line no-console
         console.log('[socket] send ack', ack);
         resolve(ack);

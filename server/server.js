@@ -10,6 +10,8 @@ const logger = require('./utils/logger');
 const app = express();
 app.use(cors());
 app.use(express.json());
+// Serve uploaded files statically (basic; in production add auth & caching headers)
+app.use('/uploads', express.static(require('path').join(__dirname, 'uploads')));
 
 // Simple ping route for low-overhead connectivity tests
 app.get('/ping', (_req, res) => res.type('text').send('pong'));
@@ -25,6 +27,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/groups', require('./routes/groups'));
 app.use('/api', require('./routes/requests')); // contains /requests and /groups/:gid/requests
 app.use('/api/messages', require('./routes/messages'));
+app.use('/api/uploads', require('./routes/uploads'));
 
 // Health check - will succeed once Mongo connected
 app.get('/api/health', async (_req, res) => {
