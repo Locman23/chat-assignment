@@ -1,18 +1,26 @@
 const { MongoClient } = require('mongodb');
 
-// Static configuration (can be moved to env vars later)
+// Configuration (override via env when deploying/containerizing)
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017';
 const DB_NAME = process.env.MONGODB_DB || 'chatapp';
 
-let client; let db; let collections;
+let client; // MongoClient instance
+let db; // Connected DB instance
+let collections; // { users, groups, joinRequests }
 
-// Simple id helpers (retain legacy readable id style)
-const makeId = (prefix = 'u') => `${prefix}${Date.now()}${Math.floor(Math.random() * 1000)}`;
+// Id helpers (legacy readable style; consider nanoid/shortid later)
+function makeId(prefix = 'u') {
+  return `${prefix}${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
 const makeGid = () => makeId('g');
 const makeCid = () => makeId('c');
 const makeRid = () => makeId('r');
 const normalize = (s) => String(s || '').toLowerCase();
 
+/**
+ * Establish connection (idempotent). Subsequent calls return cached handles.
+ * @returns {Promise<{db: import('mongodb').Db, users, groups, joinRequests}>}
+ */
 async function connectMongo() {
   if (db) return { db, ...collections };
   client = new MongoClient(MONGODB_URI, { ignoreUndefined: true });
@@ -23,15 +31,20 @@ async function connectMongo() {
     groups: db.collection('groups'),
     joinRequests: db.collection('joinRequests')
   };
-
-  // Indexes (id fields are our custom ids, not the Mongo _id)
-  await collections.users.createIndex({ username: 1 }, { unique: true });
-  await collections.users.createIndex({ id: 1 }, { unique: true });
-  await collections.groups.createIndex({ id: 1 }, { unique: true });
-  await collections.groups.createIndex({ name: 1 });
-  await collections.joinRequests.createIndex({ gid: 1, username: 1, status: 1 });
-
+  await ensureIndexes();
   return { db, ...collections };
+}
+
+async function ensureIndexes() {
+  const { users, groups, joinRequests } = collections;
+  // Users
+  await users.createIndex({ username: 1 }, { unique: true });
+  await users.createIndex({ id: 1 }, { unique: true });
+  // Groups
+  await groups.createIndex({ id: 1 }, { unique: true });
+  await groups.createIndex({ name: 1 });
+  // Join Requests
+  await joinRequests.createIndex({ gid: 1, username: 1, status: 1 });
 }
 
 function getCollections() {
@@ -44,8 +57,16 @@ function getDb() {
   return db;
 }
 
+async function disconnectMongo() {
+  if (client) {
+    await client.close();
+    client = undefined; db = undefined; collections = undefined;
+  }
+}
+
 module.exports = {
   connectMongo,
+  disconnectMongo,
   getCollections,
   getDb,
   makeId,
