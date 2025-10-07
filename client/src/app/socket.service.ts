@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
 import { Observable, Subject } from 'rxjs';
+import { SOCKET_BASE } from './config';
 
 export interface ChatMessage {
   id: string;
@@ -9,6 +10,8 @@ export interface ChatMessage {
   channelId: string;
   text: string;
   ts: number;
+  attachments?: Array<{ type: string; url: string }>;
+  avatarUrl?: string; // relative or absolute
 }
 
 @Injectable({ providedIn: 'root' })
@@ -17,8 +20,9 @@ export class SocketService {
   private message$ = new Subject<ChatMessage>();
   private presence$ = new Subject<string[]>();
   private typing$ = new Subject<string[]>();
+  private roster$ = new Subject<Array<{ username: string; status: string }>>();
 
-  connect(url = 'http://localhost:3000') {
+  connect(url = SOCKET_BASE) {
     if (this.socket) return;
   this.socket = io(url, { autoConnect: true });
     this.socket.on('connect', () => {
@@ -33,12 +37,17 @@ export class SocketService {
       // eslint-disable-next-line no-console
       console.error('[socket] error', err);
     });
-    this.socket.on('chat:message', (m: ChatMessage) => this.message$.next(m));
+  this.socket.on('chat:message', (m: ChatMessage) => this.message$.next(m));
     this.socket.on('chat:presence', (payload: { users: string[] }) => {
       this.presence$.next((payload?.users || []).slice());
     });
     this.socket.on('chat:typing', (payload: { users: string[] }) => {
       this.typing$.next((payload?.users || []).slice());
+    });
+    this.socket.on('chat:roster', (payload: { roster: Array<{ username: string; status: string }> }) => {
+      // eslint-disable-next-line no-console
+      console.log('[socket] roster event', payload);
+      this.roster$.next((payload?.roster || []).slice());
     });
   }
 
@@ -61,6 +70,16 @@ export class SocketService {
     return this.typing$.asObservable();
   }
 
+  roster(): Observable<Array<{ username: string; status: string }>> {
+    return this.roster$.asObservable();
+  }
+
+  requestRoster(): Promise<{ ok: boolean; roster?: Array<{ username: string; status: string }> }> {
+    return new Promise((resolve) => {
+      this.socket?.emit('chat:roster:request', {}, (ack: any) => resolve(ack));
+    });
+  }
+
   join(username: string, groupId: string, channelId: string): Promise<{ ok: boolean; error?: string; history?: ChatMessage[] }> {
     return new Promise((resolve) => {
       this.socket?.emit('chat:join', { username, groupId, channelId }, (ack: any) => {
@@ -77,9 +96,12 @@ export class SocketService {
     });
   }
 
-  send(text: string): Promise<{ ok: boolean; error?: string; message?: ChatMessage }> {
+  send(text: string, opts?: { imageUrl?: string; attachments?: Array<{ type: string; url: string }> }): Promise<{ ok: boolean; error?: string; message?: ChatMessage }> {
     return new Promise((resolve) => {
-      this.socket?.emit('chat:message', { text }, (ack: any) => {
+      const payload: any = { text };
+      if (opts?.imageUrl) payload.imageUrl = opts.imageUrl;
+      if (opts?.attachments) payload.attachments = opts.attachments;
+      this.socket?.emit('chat:message', payload, (ack: any) => {
         // eslint-disable-next-line no-console
         console.log('[socket] send ack', ack);
         resolve(ack);

@@ -1,5 +1,5 @@
 // In-memory presence tracking (not persisted). Supports multi-tab by counting socket instances.
-// roomKey => username => count
+// roomKey => username(lower) => { username, sockets: Set<socketId> }
 const roomUsers = new Map();
 
 function addPresence(room, username, socketId) {
@@ -34,4 +34,23 @@ function listPresence(room) {
   return Array.from(userMap.values()).map(v => v.username).sort((a,b)=>a.localeCompare(b));
 }
 
-module.exports = { addPresence, removePresence, listPresence };
+// Determine status of a username relative to a specific room.
+// Returns 'active' if in this room, 'online' if in some other room, else 'offline'.
+function userStatus(username, currentRoom) {
+  if (!username) return 'offline';
+  const target = username.toLowerCase();
+  let foundElsewhere = false;
+  for (const [room, userMap] of roomUsers.entries()) {
+    if (userMap.has(target)) {
+      if (room === currentRoom) return 'active';
+      foundElsewhere = true;
+    }
+  }
+  return foundElsewhere ? 'online' : 'offline';
+}
+
+function buildRoster(usernames, currentRoom) {
+  return (usernames || []).map(u => ({ username: u, status: userStatus(u, currentRoom) }));
+}
+
+module.exports = { addPresence, removePresence, listPresence, userStatus, buildRoster };

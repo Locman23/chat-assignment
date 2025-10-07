@@ -2,6 +2,17 @@ const express = require('express');
 const router = express.Router();
 const { getCollections, makeRid, normalize } = require('../db/mongo');
 
+/*
+Join request workflow:
+ - Non-members submit join requests per group (pending -> approved/denied).
+ - Only Super Admin can list or process requests (coarse governance layer for now).
+ - Approval adds membership (idempotent if already added concurrently); denial just updates status.
+ - Duplicate pending request (same user/group) returns 409.
+Future:
+ - Delegate approval to group owner/admins.
+ - Add pagination & filtering when request volume increases.
+*/
+
 async function getUserByUsername(username) {
   const { users } = getCollections();
   if (!username) return null;

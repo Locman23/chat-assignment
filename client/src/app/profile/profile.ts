@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 
 import { Api } from '../api.service';
 import { Auth, User } from '../auth.service';
+import { absoluteUrl } from '../config';
 
 @Component({
   selector: 'app-profile',
@@ -17,8 +18,10 @@ export class Profile implements OnInit {
   form: { username: string; email: string; password: string } = { username: '', email: '', password: '' };
   error = '';
   success = '';
+  uploading = false;
+  avatarPreview: string | undefined;
 
-  constructor(private api: Api, private auth: Auth, private router: Router) {}
+  constructor(private api: Api, public auth: Auth, private router: Router) {}
 
   ngOnInit(): void {
     const u = this.auth.user();
@@ -26,6 +29,7 @@ export class Profile implements OnInit {
     if ((u.username || '').toLowerCase() === 'super') { this.router.navigate(['/dashboard']); return; }
     this.form.username = u.username || '';
     this.form.email = u.email || '';
+  if (u.avatarUrl) this.avatarPreview = absoluteUrl(u.avatarUrl);
   }
 
   save() {
@@ -50,4 +54,33 @@ export class Profile implements OnInit {
       }
     });
   }
+
+  async onAvatarChange(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    if (!input.files || !input.files.length) return;
+    const file = input.files[0];
+    if (!file.type.startsWith('image/')) { this.error = 'Invalid image type'; return; }
+    const u = this.auth.user();
+    if (!u) { this.error = 'Not authenticated'; return; }
+    this.error = ''; this.success = '';
+    this.uploading = true;
+    try {
+      const res: any = await this.api.uploadAvatar(file, u.username).toPromise();
+      if (res?.ok) {
+        const updated = res.user as User;
+  this.auth.login(updated);
+  this.avatarPreview = res.avatarUrl ? absoluteUrl(res.avatarUrl) : absoluteUrl(updated.avatarUrl || '');
+        this.success = 'Avatar updated';
+      } else {
+        this.error = 'Upload failed';
+      }
+    } catch (e: any) {
+      this.error = e?.error?.error || 'Upload failed';
+    } finally {
+      this.uploading = false;
+      input.value = '';
+    }
+  }
+
+  // (absoluteUrl helper centralizes base URL handling)
 }

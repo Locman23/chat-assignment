@@ -2,6 +2,17 @@ const express = require('express');
 const router = express.Router();
 const { getCollections, makeId, normalize } = require('../db/mongo');
 
+/*
+User management:
+ - Basic CRUD and single-role assignment (simplified model: one active role).
+ - Case-insensitive username uniqueness via normalize() + anchored regex.
+ - Demoting a Group Admin purges them from all groups' admins arrays.
+Future:
+ - Hash passwords; exclude sensitive fields from responses.
+ - Support multi-role arrays if fine-grained permissions needed.
+ - Add pagination / search for user listing when counts grow.
+*/
+
 // GET /api/users
 router.get('/', async (_req, res) => {
   const { users } = getCollections();
@@ -22,7 +33,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/users/:id/role
-router.put('/:id/role', async (req, res) => {
+router.put('/:id/role', async (req, res) => { // assign or change a user's single role
   const { id } = req.params;
   const { role, requester } = req.body || {};
   if (!role || !role.trim()) return res.status(400).json({ error: 'role required' });
@@ -37,7 +48,7 @@ router.put('/:id/role', async (req, res) => {
   if (!isSuper && role !== 'User') return res.status(403).json({ error: 'not authorized to change role' });
   const prevRoles = Array.isArray(user.roles) ? [...user.roles] : [];
   await users.updateOne({ id }, { $set: { roles: [role] } });
-  if (prevRoles.includes('Group Admin') && role !== 'Group Admin') {
+  if (prevRoles.includes('Group Admin') && role !== 'Group Admin') { // cascade removal from group admin lists
     const uname = user.username;
     await groups.updateMany({ admins: { $in: [uname] } }, { $pull: { admins: uname } });
   }
@@ -71,7 +82,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/users/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req, res) => { // delete user (self or Super Admin)
   const { id } = req.params;
   const { requester } = req.body || {};
   const { users, groups } = getCollections();
@@ -82,7 +93,7 @@ router.delete('/:id', async (req, res) => {
   const isSelf = reqUser && reqUser.id === id;
   if (!isSuper && !isSelf) return res.status(403).json({ error: 'not authorized to delete this user' });
   await users.deleteOne({ id });
-  await groups.updateMany({}, { $pull: { members: toDelete.username, admins: toDelete.username } });
+  await groups.updateMany({}, { $pull: { members: toDelete.username, admins: toDelete.username } }); // cleanup references
   return res.json({ success: true });
 });
 

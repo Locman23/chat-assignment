@@ -1,0 +1,12 @@
+// Server-wide constants (avoid magic numbers)
+const DEFAULT_HISTORY_LIMIT = 50;
+const MAX_HISTORY_LIMIT = 200;
+const ATTACHMENT_MAX_PER_MESSAGE = 4;
+const UPLOAD_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
+
+module.exports = {
+  DEFAULT_HISTORY_LIMIT,
+  MAX_HISTORY_LIMIT,
+  ATTACHMENT_MAX_PER_MESSAGE,
+  UPLOAD_MAX_FILE_SIZE_BYTES
+};
