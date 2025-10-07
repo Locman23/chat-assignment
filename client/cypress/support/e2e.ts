@@ -15,3 +15,14 @@
 
 // When a command from ./commands is ready to use, import with `import './commands'` syntax
 import './commands';
+
+// Global cleanup after each spec. Adjust prefixes if your tests use different naming conventions.
+// This targets ephemeral entities created during tests (groups prefixed RT_, temp groups, or users with userb_/tempUser prefix).
+afterEach(() => {
+	// Best-effort cleanup; failures should not fail the test retroactively.
+	cy.log('Post-test cleanup starting');
+	cy.cleanupTestData({
+		prefixGroups: 'RT_',
+		prefixUsers: 'userb_'
+	});
+});

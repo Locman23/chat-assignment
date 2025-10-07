@@ -51,12 +51,15 @@ declare global {
 		interface Chainable {
 			apiLogin(username: string, password?: string): Chainable<void>;
 			ensureUser(username: string, email?: string, password?: string): Chainable<void>;
-				ensureGroupWithChannel(groupName: string, channelName: string, ownerUsername?: string): Chainable<{ groupId: string; channelId: string }>;
+			ensureGroupWithChannel(groupName: string, channelName: string, ownerUsername?: string): Chainable<{ groupId: string; channelId: string }>;
 			requestJoin(groupId: string, username: string): Chainable<{ requestId: string }>;
 			listJoinRequests(requester: string): Chainable<any[]>;
 			approveJoinRequest(requestId: string, requester: string): Chainable<void>;
 			selectGroupChannel(groupName: string, channelName: string): Chainable<void>;
 			sendChatMessage(text: string): Chainable<void>;
+			cleanupTestData(options?: { users?: string[]; groups?: string[]; prefixUsers?: string; prefixGroups?: string }): Chainable<void>;
+			deleteUser(username: string): Chainable<void>;
+			deleteGroup(groupId: string): Chainable<void>;
 		}
 	}
 }
@@ -163,6 +166,74 @@ Cypress.Commands.add('selectGroupChannel', (groupName: string, channelName: stri
 Cypress.Commands.add('sendChatMessage', (text: string) => {
 	cy.get('[data-cy=chat-input]').clear().type(text);
 	cy.get('[data-cy=chat-send]').click();
+});
+
+// Admin-only destructive helpers (intended for test cleanup). Assumes caller is logged in as super.
+Cypress.Commands.add('deleteUser', (username: string) => {
+	if (!username) return;
+	cy.request({
+		method: 'DELETE',
+		url: `${API_BASE}/users/placeholder`, // placeholder to preserve shape; real deletion via username lookup below
+		failOnStatusCode: false,
+		body: { requester: 'super' }
+	}).then(() => {
+		// Direct delete endpoint uses id; need lookup by listing users.
+		cy.request('GET', `${API_BASE}/users`).then(res => {
+			const user = (res.body as any).users.find((u: any) => u.username === username);
+			if (user) {
+				cy.request({
+					method: 'DELETE',
+					url: `${API_BASE}/users/${user.id}`,
+					body: { requester: 'super' },
+					failOnStatusCode: false
+				});
+			}
+		});
+	});
+});
+
+Cypress.Commands.add('deleteGroup', (groupId: string) => {
+	if (!groupId) return;
+	cy.request({
+		method: 'DELETE',
+		url: `${API_BASE}/groups/${groupId}`,
+		body: { requester: 'super' },
+		failOnStatusCode: false
+	});
+});
+
+// Bulk cleanup: specify exact lists or prefixes (prefix match on names for automation-created artifacts)
+Cypress.Commands.add('cleanupTestData', (options = {}) => {
+	const { users = [], groups = [], prefixUsers, prefixGroups } = options;
+	// Fetch current state once for users & groups
+	cy.apiLogin('super');
+	cy.request('GET', `${API_BASE}/users`).then(userRes => {
+		const allUsers: any[] = (userRes.body as any).users || [];
+		const targetUsers = new Set<string>();
+		users.forEach(u => targetUsers.add(u));
+		if (prefixUsers) {
+			allUsers.filter(u => u.username?.startsWith(prefixUsers)).forEach(u => targetUsers.add(u.username));
+		}
+		// Never delete the seeded super
+		targetUsers.delete('super');
+		if (targetUsers.size) {
+			cy.wrap(Array.from(targetUsers)).each((uname: string) => {
+				cy.deleteUser(uname);
+			});
+		}
+	});
+	cy.request('GET', `${API_BASE}/groups`).then(groupRes => {
+		const allGroups: any[] = (groupRes.body as any).groups || [];
+		const targetGroups: string[] = [];
+		allGroups.forEach(g => {
+			if (groups.includes(g.name)) targetGroups.push(g.id);
+			else if (prefixGroups && g.name?.startsWith(prefixGroups)) targetGroups.push(g.id);
+		});
+		// Avoid deleting the very first seeded general group if business logic relies on it
+		for (const gid of targetGroups) {
+			cy.deleteGroup(gid);
+		}
+	});
 });
 
 export {};
