@@ -1,5 +1,3 @@
-<div align="center">
-
 # Realtime Chat Application (Angular + Node/Express + Socket.IO + MongoDB)
 
 </div>
