@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getCollections, makeId, normalize } = require('../db/mongo');
+const asyncHandler = require('../utils/asyncHandler');
 
 /*
 User management:
@@ -14,14 +15,14 @@ Future:
 */
 
 // GET /api/users
-router.get('/', async (_req, res) => {
+router.get('/', asyncHandler(async (_req, res) => {
   const { users } = getCollections();
   const list = await users.find({}).project({ _id: 0 }).toArray();
   res.json({ users: list });
-});
+}));
 
 // POST /api/users
-router.post('/', async (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const { username, email, password } = req.body || {};
   if (!username || !username.trim()) return res.status(400).json({ error: 'username required' });
   const { users } = getCollections();
@@ -30,10 +31,10 @@ router.post('/', async (req, res) => {
   const user = { id: makeId('u'), username: username.trim(), email: (email || '').trim(), password: password || '', roles: ['User'], groups: [] };
   await users.insertOne(user);
   return res.status(201).json({ user });
-});
+}));
 
 // PUT /api/users/:id/role
-router.put('/:id/role', async (req, res) => { // assign or change a user's single role
+router.put('/:id/role', asyncHandler(async (req, res) => { // assign or change a user's single role
   const { id } = req.params;
   const { role, requester } = req.body || {};
   if (!role || !role.trim()) return res.status(400).json({ error: 'role required' });
@@ -54,10 +55,10 @@ router.put('/:id/role', async (req, res) => { // assign or change a user's singl
   }
   const updated = await users.findOne({ id }, { projection: { _id: 0 } });
   return res.json({ user: updated });
-});
+}));
 
 // PUT /api/users/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { username, email, password, requester } = req.body || {};
   const { users } = getCollections();
@@ -79,10 +80,10 @@ router.put('/:id', async (req, res) => {
   await users.updateOne({ id }, { $set: update });
   const updated = await users.findOne({ id }, { projection: { _id: 0 } });
   return res.json({ user: updated });
-});
+}));
 
 // DELETE /api/users/:id
-router.delete('/:id', async (req, res) => { // delete user (self or Super Admin)
+router.delete('/:id', asyncHandler(async (req, res) => { // delete user (self or Super Admin)
   const { id } = req.params;
   const { requester } = req.body || {};
   const { users, groups } = getCollections();
@@ -95,6 +96,6 @@ router.delete('/:id', async (req, res) => { // delete user (self or Super Admin)
   await users.deleteOne({ id });
   await groups.updateMany({}, { $pull: { members: toDelete.username, admins: toDelete.username } }); // cleanup references
   return res.json({ success: true });
-});
+}));
 
 module.exports = router;

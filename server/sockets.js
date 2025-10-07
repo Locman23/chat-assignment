@@ -13,6 +13,7 @@ async function getUserByUsername(username) {
 async function getGroupById(gid) { const { groups } = getCollections(); return groups.findOne({ id: gid }); }
 const { publicBase } = require('./utils/base');
 const { DEFAULT_HISTORY_LIMIT } = require('./constants');
+const { shortId } = require('./utils/ids');
 
 // Cache the public base URL once for absolute URL construction.
 const BASE_URL = publicBase();
@@ -45,7 +46,7 @@ function initSockets(httpServer) {
     if (!room) return;
     logger.debug('[system] attempt', { room, groupId, channelId, text });
     const msg = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: shortId(),
       username: 'system',
       groupId,
       channelId,
@@ -148,7 +149,7 @@ function initSockets(httpServer) {
       const g = await getGroupById(groupId);
       if (!(await canJoinGroup(username, g))) return ack && ack({ ok: false, error: 'not a member' });
       const msg = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+        id: shortId(),
         username: String(username || 'unknown'),
         groupId,
         channelId,
