@@ -2,7 +2,7 @@
 const { getDb } = require('../db/mongo');
 const { ATTACHMENT_MAX_PER_MESSAGE, DEFAULT_HISTORY_LIMIT } = require('../constants');
 
-// Basic shape validators (lightweight; heavier validation should occur earlier in the pipeline).
+// Basic shape validators
 function isNonEmptyString(v) { return typeof v === 'string' && v.length > 0; }
 
 /**
