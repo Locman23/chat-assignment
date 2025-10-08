@@ -27,7 +27,9 @@ import { HISTORY_PAGE_SIZE, SCROLL_BOTTOM_THRESHOLD_PX, TYPING_INACTIVITY_MS } f
 // Magic value centralisation for clarity & future refactor
 const SYSTEM_USERNAME = 'system';
 
-// Module‑scoped internal interfaces (kept un-exported intentionally)
+// ---------------------------------------------------------------------------
+// Internal (module-scoped) interfaces (kept un-exported intentionally)
+// ---------------------------------------------------------------------------
 interface ChatAttachment { type: string; url: string; }
 interface DisplayedMessage { id: string; username: string; text?: string; ts: number; attachments?: ChatAttachment[]; avatarUrl?: string; }
 interface RosterEntry { username: string; status: string; avatarUrl?: string }
@@ -42,12 +44,20 @@ interface ChatGroup { id: string; name: string; ownerUsername?: string; members?
   styleUrls: ['./chat.scss']
 })
 export class Chat implements OnInit, AfterViewInit, OnDestroy {
-  // --- Static helpers / constants -------------------------------------------
-  private static readonly AVATAR_ORDER = (status: string) => status === 'active' ? 0 : status === 'online' ? 1 : 2;
+  // -------------------------------------------------------------------------
+  // Static helpers / constants
+  // -------------------------------------------------------------------------
+  private static readonly AVATAR_ORDER = (status: string) =>
+    status === 'active' ? 0 : (status === 'online' ? 1 : 2);
   // Fixed color palette for deterministic user placeholders (simple hashing)
-  private palette: string[] = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#0EA5E9', '#14B8A6', '#F43F5E', '#6D28D9', '#DD6B20', '#059669', '#2563EB'];
+  private palette: string[] = [
+    '#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#0EA5E9',
+    '#14B8A6', '#F43F5E', '#6D28D9', '#DD6B20', '#059669', '#2563EB'
+  ];
 
-  // --- State -----------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Component state
+  // -------------------------------------------------------------------------
   groups: ChatGroup[] = [];
   selectedGroupId = '';
   selectedChannelId = '';
@@ -61,7 +71,9 @@ export class Chat implements OnInit, AfterViewInit, OnDestroy {
   hasMore = false; // becomes true if server indicates older history likely exists
   loadingOlder = false;
 
-  // --- Internal --------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Internal runtime fields (non-UI state)
+  // -------------------------------------------------------------------------
   private typing = false;
   private typingTimer?: any; // using any due to browser timer typing differences
   private atBottom = true;
@@ -89,7 +101,9 @@ export class Chat implements OnInit, AfterViewInit, OnDestroy {
     this.loadGroups();
   }
 
-  ngAfterViewInit(): void { this.deferScrollToBottom(); }
+  ngAfterViewInit(): void {
+    this.deferScrollToBottom();
+  }
 
   ngOnDestroy(): void {
     for (const s of this.subs) {
@@ -132,7 +146,9 @@ export class Chat implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Visible groups (Super sees all; regular user sees memberships). */
-  visibleGroups() { return this.isSuper() ? (this.groups || []) : (this.groups || []).filter(g => this.isMember(g)); }
+  visibleGroups() {
+    return this.isSuper() ? (this.groups || []) : (this.groups || []).filter(g => this.isMember(g));
+  }
 
   get selectedGroup() {
     return (this.groups || []).find((g: any) => g.id === this.selectedGroupId);
@@ -319,7 +335,9 @@ export class Chat implements OnInit, AfterViewInit, OnDestroy {
     return `${this.typingUsers.slice(0, 2).join(', ')} and ${this.typingUsers.length - 2} others are typing...`;
   }
 
-  private deferScrollToBottom() { queueMicrotask(() => this.scrollToBottom()); }
+  private deferScrollToBottom() {
+    queueMicrotask(() => this.scrollToBottom());
+  }
 
   private scrollToBottom() {
     try {
@@ -361,7 +379,7 @@ export class Chat implements OnInit, AfterViewInit, OnDestroy {
     return trimmed.charAt(0).toUpperCase();
   }
 
-  private colorCache = new Map<string,string>();
+  private colorCache = new Map<string, string>();
   colorFor(name: string) {
     if (!name) return '#888';
     const key = name.toLowerCase();
@@ -369,7 +387,7 @@ export class Chat implements OnInit, AfterViewInit, OnDestroy {
     if (existing) return existing;
     // Simple DJB2 hash
     let h = 5381;
-    for (let i=0;i<key.length;i++) h = ((h << 5) + h) + key.charCodeAt(i);
+  for (let i = 0; i < key.length; i++) h = ((h << 5) + h) + key.charCodeAt(i);
     const color = this.palette[Math.abs(h) % this.palette.length];
     this.colorCache.set(key, color);
     return color;
@@ -390,7 +408,9 @@ export class Chat implements OnInit, AfterViewInit, OnDestroy {
     const shouldScroll = this.atBottom;
     const built = this.buildMessage(m);
     this.messages = [...this.messages, built];
-    if (built.avatarUrl && built.username !== SYSTEM_USERNAME) this.ensureAvatarCache(built.username, built.avatarUrl, shouldScroll);
+    if (built.avatarUrl && built.username !== SYSTEM_USERNAME) {
+      this.ensureAvatarCache(built.username, built.avatarUrl, shouldScroll);
+    }
     if (shouldScroll) this.deferScrollToBottom();
   }
 
@@ -416,7 +436,9 @@ export class Chat implements OnInit, AfterViewInit, OnDestroy {
   private applyRoster(r: any[]) {
     if (!Array.isArray(r)) return;
     // Pre-cache avatars from existing messages
-    for (const m of this.messages) if (m.avatarUrl) this.rosterMap.set(m.username.toLowerCase(), m.avatarUrl);
+    for (const m of this.messages) {
+      if (m.avatarUrl) this.rosterMap.set(m.username.toLowerCase(), m.avatarUrl);
+    }
     const enriched = r.map(u => {
       const key = String(u.username).toLowerCase();
       const incoming = this.absUrl(u.avatarUrl);
@@ -434,7 +456,10 @@ export class Chat implements OnInit, AfterViewInit, OnDestroy {
     this.messages = this.messages.map(m => {
       if (!m.avatarUrl && m.username !== SYSTEM_USERNAME) {
         const av = this.rosterMap.get(m.username.toLowerCase());
-        if (av) { mutated = true; return { ...m, avatarUrl: av }; }
+        if (av) {
+          mutated = true;
+          return { ...m, avatarUrl: av };
+        }
       }
       return m;
     });
