@@ -8,10 +8,6 @@ User management:
  - Basic CRUD and single-role assignment (simplified model: one active role).
  - Case-insensitive username uniqueness via normalize() + anchored regex.
  - Demoting a Group Admin purges them from all groups' admins arrays.
-Future:
- - Hash passwords; exclude sensitive fields from responses.
- - Support multi-role arrays if fine-grained permissions needed.
- - Add pagination / search for user listing when counts grow.
 */
 
 // GET /api/users
