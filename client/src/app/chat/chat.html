@@ -35,10 +35,6 @@
       <ng-template #chooseGroup><h2>Select a group</h2></ng-template>
       <div class="muted small" *ngIf="statusMsg">{{ statusMsg }}</div>
       <div class="msg msg-error" *ngIf="errorMsg">{{ errorMsg }}</div>
-      <div class="presence" *ngIf="presenceUsers.length && selectedChannelId">
-        <span class="presence-label">Online:</span>
-        <span class="presence-user" *ngFor="let u of presenceUsers; let last = last">{{ u }}<span *ngIf="!last">, </span></span>
-      </div>
     </div>
 
   <div class="chat-body" #scrollContainer (scroll)="onScroll()" data-cy="chat-scroll">

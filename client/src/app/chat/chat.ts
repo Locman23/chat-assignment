@@ -273,9 +273,7 @@ export class Chat implements OnInit, AfterViewInit, OnDestroy {
       this.errorMsg = ack?.error || 'Failed to send message';
     }
     this.messageText = '';
-    // Clear typing indicator after send
     this.stopTyping();
-    // Keep scroll pinned after send
     this.deferScrollToBottom();
   }
 
