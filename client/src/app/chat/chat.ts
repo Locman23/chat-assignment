@@ -239,7 +239,7 @@ export class Chat implements OnInit, AfterViewInit, OnDestroy {
     const prevScrollEl = this.scrollContainer?.nativeElement;
     const prevHeight = prevScrollEl ? prevScrollEl.scrollHeight : 0;
     const username = this.username();
-  this.api.getMessages(this.selectedGroupId, this.selectedChannelId, { user: username, limit: HISTORY_PAGE_SIZE, beforeTs }).subscribe({
+    this.api.getMessages(this.selectedGroupId, this.selectedChannelId, { user: username, limit: HISTORY_PAGE_SIZE, beforeTs }).subscribe({
       next: (res) => {
   const incoming = (res.messages || []).filter(m => !this.messages.some(ex => ex.id === m.id));
   // Prepend older messages (pagination backward)
@@ -291,7 +291,7 @@ export class Chat implements OnInit, AfterViewInit, OnDestroy {
     try {
       const res: any = await this.api.uploadMessageImage(file, { username, groupId: this.selectedGroupId, channelId: this.selectedChannelId }).toPromise();
       if (res?.ok && res.url) {
-        // Send message with image attachment (text optional)
+        // Send message with image attachment
         const ack = await this.sockets.send(this.messageText.trim(), { imageUrl: res.url });
         if (!ack?.ok) this.errorMsg = ack?.error || 'Failed to send image';
         this.messageText = '';
